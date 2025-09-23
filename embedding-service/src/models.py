@@ -2,11 +2,13 @@ from pydantic import BaseModel, Field
 
 
 class RequestTextModel(BaseModel):
-    text: str = Field(max_length=2048)
+    # 77 tokens
+    text: str = Field(max_length=500)
 
 
 class RequestTextsModel(BaseModel):
-    texts: list[str] = Field(max_length=256)
+    # Estimate 200MB per text = 10GB max
+    texts: list[str] = Field(max_length=50)
 
 
 class ResponseEmbeddingModel(BaseModel):
@@ -14,4 +16,5 @@ class ResponseEmbeddingModel(BaseModel):
 
 
 class ResponseEmbeddingsModel(BaseModel):
-    embeddings: list[list[float]] = Field(max_length=256)
+    # Estimate 200MB per text = 10GB max
+    embeddings: list[list[float]] = Field(max_length=50)

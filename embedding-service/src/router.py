@@ -9,7 +9,6 @@ from models import (
     ResponseEmbeddingsModel,
 )
 from model import Model
-from threading import Semaphore
 
 logging.basicConfig(
     level=logging.INFO,
