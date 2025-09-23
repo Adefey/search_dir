@@ -2,8 +2,14 @@ from fastapi import FastAPI, File
 import logging
 import sys
 from datetime import datetime
-from models import RequestTextModel, ResponseEmbeddingModel
+from models import (
+    RequestTextModel,
+    RequestTextsModel,
+    ResponseEmbeddingModel,
+    ResponseEmbeddingsModel,
+)
 from model import Model
+from threading import Semaphore
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,10 +38,29 @@ def post_text_embedding(request: RequestTextModel):
     return response
 
 
+@app.post("/api/v1/texts_embeddings", response_model=ResponseEmbeddingsModel)
+def post_texts_embeddings(request: RequestTextsModel):
+    logger.info(f"Got /api/v1/texts_embeddings request")
+    texts = request.texts
+    emb = model.encode_texts(texts)
+    response = ResponseEmbeddingsModel(embeddings=emb)
+    logger.info(f"Finished /api/v1/texts_embeddings")
+    return response
+
+
 @app.post("/api/v1/image_embedding", response_model=ResponseEmbeddingModel)
 def post_image_embedding(image: bytes = File()):
     logger.info(f"Got /api/v1/image_embedding request")
     emb = model.encode_image(image)
     response = ResponseEmbeddingModel(embedding=emb)
     logger.info(f"Finished /api/v1/image_embedding")
+    return response
+
+
+@app.post("/api/v1/images_embeddings", response_model=ResponseEmbeddingsModel)
+def post_images_embeddings(images: list[bytes] = File()):
+    logger.info(f"Got /api/v1/images_embeddings request")
+    emb = model.encode_images(images)
+    response = ResponseEmbeddingsModel(embeddings=emb)
+    logger.info(f"Finished /api/v1/images_embeddings")
     return response
