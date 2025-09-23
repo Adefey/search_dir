@@ -1,0 +1,41 @@
+from fastapi import FastAPI, File
+import logging
+import sys
+from datetime import datetime
+from models import RequestTextModel, ResponseEmbeddingModel
+from model import Model
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
+    handlers=[
+        logging.FileHandler(
+            filename=f'logs/embedding_service_{datetime.now().strftime("%y_%m_%d_%H:%M:%S")}.log'
+        ),
+        logging.StreamHandler(stream=sys.stdout),
+    ],
+)
+
+logger = logging.getLogger(__name__)
+model = Model()
+app = FastAPI(title="Embedding Microservise")
+
+
+@app.post("/api/v1/text_embedding", response_model=ResponseEmbeddingModel)
+def post_text_embedding(request: RequestTextModel):
+    logger.info(f"Got /api/v1/text_embedding request")
+    text = request.text
+    emb = model.encode_text(text)
+    response = ResponseEmbeddingModel(embedding=emb)
+    logger.info(f"Finished /api/v1/text_embedding")
+    return response
+
+
+@app.post("/api/v1/image_embedding", response_model=ResponseEmbeddingModel)
+def post_image_embedding(image: bytes = File()):
+    logger.info(f"Got /api/v1/image_embedding request")
+    emb = model.encode_image(image)
+    response = ResponseEmbeddingModel(embedding=emb)
+    logger.info(f"Finished /api/v1/image_embedding")
+    return response

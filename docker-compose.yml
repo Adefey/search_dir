@@ -1,0 +1,7 @@
+services:
+  embedding-service:
+    build: ./embedding-service
+    ports:
+      - 8001:8000
+    volumes:
+      - ./logs:/app/logs
