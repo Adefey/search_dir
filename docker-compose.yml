@@ -1,7 +1,29 @@
 services:
   embedding-service:
     build: ./embedding-service
+    container_name: embedding-service
     ports:
       - 8001:8000
     volumes:
       - ./logs:/app/logs
+
+  main-service:
+    build: ./main-service
+    container_name: main-service
+    ports:
+      - 8002:8000
+    volumes:
+      - ./logs:/app/logs
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: always
+    container_name: qdrant
+    volumes:
+      - ./qdrant_data:/qdrant/storage
+
+  redis:
+    image: redis:8.2.1
+    restart: always
+    container_name: redis
+  
