@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from threading import Thread
 from time import sleep
 
 import requests
@@ -48,29 +49,33 @@ def consumer():
             files.append(filename)
 
         if len(files) == BATCH_SIZE or filename is None:
-            logger.info(
-                f"Flound {len(files)} files, sending http://{MAIN_SERVICE_URL}/api/v1/index"
-            )
-            resp = requests.post(
-                f"http://{MAIN_SERVICE_URL}/api/v1/index",
-                json={"files": files},
-            )
+            logger.info(f"[CONSUMER] Found {len(files)} files")
+            if files:
+                logger.info(f"[CONSUMER] Sending http://{MAIN_SERVICE_URL}/api/v1/index")
 
-            if resp.status_code != 200:
-                logger.error(
-                    f"http://{MAIN_SERVICE_URL}/api/v1/index returned status {resp.status_code}"
+                resp = requests.post(
+                    f"http://{MAIN_SERVICE_URL}/api/v1/index",
+                    json={"files": files},
                 )
-            else:
-                files = []
+
+                if resp.status_code != 200:
+                    logger.error(
+                        f"[CONSUMER] http://{MAIN_SERVICE_URL}/api/v1/index returned status"
+                        f" {resp.status_code}"
+                    )
+                    logger.info("[CONSUMER] Will retry the operation")
+                else:
+                    files = []
+                    logger.info("[CONSUMER] Buffer is cleared")
 
             if filename is None:
-                logger.info("No files were retrieved from queue, sleeping 30 seconds")
+                logger.info("[CONSUMER] No files were retrieved from queue, sleeping 30 seconds")
                 sleep(30)
 
 
 def walk_filesystem_and_send_to_index():
-    producer()
-    consumer()
+    Thread(target=producer, daemon=True).start()
+    Thread(target=consumer, daemon=True).start()
 
 
 @app.post("/api/v1/start_discovery")

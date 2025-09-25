@@ -7,7 +7,7 @@ from datetime import datetime
 
 import requests
 from fastapi import FastAPI, HTTPException, status
-from models import IndexRequestModel, ResponsePathsModel
+from models import IndexRequestModel, ResponsePathsModel, ScoredFileModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
@@ -45,8 +45,8 @@ def get_files(query: str, top_n: int = 5):
         raise HTTPException(
             status_code=500,
             detail=(
-                f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding"
-                f" returned status {resp.status_code}"
+                f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status"
+                f" {resp.status_code}"
             ),
         )
     embedding = resp.json()["embedding"]
@@ -55,8 +55,9 @@ def get_files(query: str, top_n: int = 5):
         query=embedding,
         limit=top_n,
     ).points
-    files = [item.payload["path"] for item in result]
-    response = ResponsePathsModel(files=files)
+    response = ResponsePathsModel(
+        files=[ScoredFileModel(file=item.payload["path"], score=item.score) for item in result]
+    )
     logger.info(f"Finished /api/v1/files")
     return response
 
@@ -95,8 +96,8 @@ def post_index(request: IndexRequestModel):
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings"
-                    f" returned status {resp.status_code}"
+                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings returned status"
+                    f" {resp.status_code}"
                 ),
             )
         embeddings = resp.json()["embeddings"]
@@ -118,8 +119,8 @@ def post_index(request: IndexRequestModel):
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings"
-                    f" returned status {resp.status_code}"
+                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings returned status"
+                    f" {resp.status_code}"
                 ),
             )
         embeddings = resp.json()["embeddings"]
@@ -128,6 +129,7 @@ def post_index(request: IndexRequestModel):
         processed_texts = []
 
     logger.debug(f"{processed_images=} {processed_texts=}")
+    logger.info(f"Processed {len(processed_images)} images and {len(processed_texts)}")
 
     qdrant.upload_points(
         "files",
