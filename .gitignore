@@ -1,2 +1,9 @@
 qdrant_data
 logs/*
+example_data/*
+!example_data/applejack.png
+!example_data/fluttershy.jpg
+!example_data/pinkie_pie.jpg 
+!example_data/rainbow_dash.png
+!example_data/rarity.jpg
+!example_data/twilight_sparkle.png
