@@ -1,14 +1,11 @@
-from fastapi import FastAPI, File
 import logging
 import sys
 from datetime import datetime
-from models import (
-    RequestTextModel,
-    RequestTextsModel,
-    ResponseEmbeddingModel,
-    ResponseEmbeddingsModel,
-)
+
+from fastapi import FastAPI, File
 from model import Model
+from models import (RequestTextModel, RequestTextsModel,
+                    ResponseEmbeddingModel, ResponseEmbeddingsModel)
 
 logging.basicConfig(
     level=logging.INFO,

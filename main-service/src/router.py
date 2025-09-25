@@ -1,18 +1,15 @@
-from fastapi import FastAPI, status, HTTPException
 import logging
-import sys
-from datetime import datetime
-import requests
-from models import ResponsePathsModel, IndexRequestModel
-from qdrant_client import QdrantClient
-from qdrant_client.models import (
-    VectorParams,
-    Distance,
-    PointStruct,
-)
-import os
 import mimetypes
+import os
+import sys
 import uuid
+from datetime import datetime
+
+import requests
+from fastapi import FastAPI, HTTPException, status
+from models import IndexRequestModel, ResponsePathsModel
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
 
 logging.basicConfig(
     level=logging.INFO,
@@ -110,7 +107,7 @@ def post_index(request: IndexRequestModel):
     # Get embeddings for texts
     texts_payload = []
     for text in texts:
-        with open(text, "r") as file:
+        with open(text) as file:
             texts_payload.append(file.read())
     if texts_payload:
         resp = requests.post(

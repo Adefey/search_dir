@@ -1,11 +1,12 @@
-from fastapi import FastAPI, BackgroundTasks
 import logging
+import os
 import sys
 from datetime import datetime
-import requests
-import os
-from redis import Redis
 from time import sleep
+
+import requests
+from fastapi import BackgroundTasks, FastAPI
+from redis import Redis
 
 logging.basicConfig(
     level=logging.INFO,

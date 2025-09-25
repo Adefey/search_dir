@@ -1,8 +1,9 @@
-from PIL import Image
-from transformers import CLIPProcessor, CLIPModel
-import torch
-import logging
 import io
+import logging
+
+import torch
+from PIL import Image
+from transformers import CLIPModel, CLIPProcessor
 
 logger = logging.getLogger(__name__)
 

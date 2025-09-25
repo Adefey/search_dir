@@ -1,4 +1,4 @@
-from pydantic import BaseModel, FilePath, Field
+from pydantic import BaseModel, Field, FilePath
 
 
 class IndexRequestModel(BaseModel):
