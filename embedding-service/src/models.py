@@ -8,7 +8,7 @@ class RequestTextModel(BaseModel):
 
 class RequestTextsModel(BaseModel):
     # Estimate 200MB per text = 10GB max
-    texts: list[str] = Field(max_length=50)
+    texts: list[str] = Field(min_length=1, max_length=50)
 
 
 class ResponseEmbeddingModel(BaseModel):

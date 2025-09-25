@@ -6,6 +6,7 @@ services:
       - 8001:8000
     volumes:
       - ./logs:/app/logs
+    env_file: "global_config.env"
 
   main-service:
     build: ./main-service
@@ -14,6 +15,8 @@ services:
       - 8002:8000
     volumes:
       - ./logs:/app/logs
+      - ./example_data:/data
+    env_file: "global_config.env"
 
   qdrant:
     image: qdrant/qdrant:latest
