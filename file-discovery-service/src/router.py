@@ -44,7 +44,7 @@ def consumer():
     while True:
         filename = redis.rpop("queue")
 
-        logger.info(f"[CONSUMER] retrieved file {filename.split("/")[1:]}")
+        logger.info(f"[CONSUMER] retrieved file {filename}")
 
         if filename is not None:
             files.append(filename)
