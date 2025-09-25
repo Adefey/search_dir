@@ -5,8 +5,11 @@ from datetime import datetime
 import requests
 from models import ResponsePathsModel, IndexRequestModel
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
-from redis import Redis
+from qdrant_client.models import (
+    VectorParams,
+    Distance,
+    PointStruct,
+)
 import os
 import mimetypes
 import uuid
@@ -25,7 +28,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Main Microservise")
-redis = Redis(host="redis", port=6379, decode_responses=True)
 qdrant = QdrantClient(host="qdrant", port=6333)
 if not qdrant.collection_exists("files"):
     qdrant.create_collection(
@@ -39,14 +41,15 @@ EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "")
 def get_files(query: str, top_n: int = 5):
     logger.info(f"Got /api/v1/files request")
     resp = requests.post(
-        f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding", json={"text": query}
+        f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding",
+        json={"text": query},
     )
     if resp.status_code != status.HTTP_200_OK:
         raise HTTPException(
             status_code=500,
             detail=(
-                f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status"
-                f" {resp.status_code}"
+                f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding"
+                f" returned status {resp.status_code}"
             ),
         )
     embedding = resp.json()["embedding"]
@@ -88,14 +91,15 @@ def post_index(request: IndexRequestModel):
             images_payload.append(("images", file.read()))
     if images_payload:
         resp = requests.post(
-            f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings", files=images_payload
+            f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings",
+            files=images_payload,
         )
         if resp.status_code != status.HTTP_200_OK:
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings returned status"
-                    f" {resp.status_code}"
+                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings"
+                    f" returned status {resp.status_code}"
                 ),
             )
         embeddings = resp.json()["embeddings"]
@@ -110,14 +114,15 @@ def post_index(request: IndexRequestModel):
             texts_payload.append(file.read())
     if texts_payload:
         resp = requests.post(
-            f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings", json={"texts": texts_payload}
+            f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings",
+            json={"texts": texts_payload},
         )
         if resp.status_code != status.HTTP_200_OK:
             raise HTTPException(
                 status_code=500,
                 detail=(
-                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings returned status"
-                    f" {resp.status_code}"
+                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings"
+                    f" returned status {resp.status_code}"
                 ),
             )
         embeddings = resp.json()["embeddings"]
@@ -130,7 +135,11 @@ def post_index(request: IndexRequestModel):
     qdrant.upload_points(
         "files",
         points=[
-            PointStruct(id=str(uuid.uuid4()), vector=emb, payload={"path": path})
+            PointStruct(
+                id=str(uuid.uuid4()),
+                vector=emb,
+                payload={"path": path},
+            )
             for path, emb in processed_images + processed_texts
         ],
     )

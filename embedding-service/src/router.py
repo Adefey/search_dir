@@ -27,7 +27,10 @@ model = Model()
 app = FastAPI(title="Embedding Microservise")
 
 
-@app.post("/api/v1/text_embedding", response_model=ResponseEmbeddingModel)
+@app.post(
+    "/api/v1/text_embedding",
+    response_model=ResponseEmbeddingModel,
+)
 def post_text_embedding(request: RequestTextModel):
     logger.info(f"Got /api/v1/text_embedding request")
     text = request.text
@@ -37,7 +40,10 @@ def post_text_embedding(request: RequestTextModel):
     return response
 
 
-@app.post("/api/v1/texts_embeddings", response_model=ResponseEmbeddingsModel)
+@app.post(
+    "/api/v1/texts_embeddings",
+    response_model=ResponseEmbeddingsModel,
+)
 def post_texts_embeddings(request: RequestTextsModel):
     logger.info(f"Got /api/v1/texts_embeddings request")
     texts = request.texts
@@ -47,7 +53,10 @@ def post_texts_embeddings(request: RequestTextsModel):
     return response
 
 
-@app.post("/api/v1/image_embedding", response_model=ResponseEmbeddingModel)
+@app.post(
+    "/api/v1/image_embedding",
+    response_model=ResponseEmbeddingModel,
+)
 def post_image_embedding(image: bytes = File()):
     logger.info(f"Got /api/v1/image_embedding request")
     emb = model.encode_image(image)
@@ -56,7 +65,10 @@ def post_image_embedding(image: bytes = File()):
     return response
 
 
-@app.post("/api/v1/images_embeddings", response_model=ResponseEmbeddingsModel)
+@app.post(
+    "/api/v1/images_embeddings",
+    response_model=ResponseEmbeddingsModel,
+)
 def post_images_embeddings(images: list[bytes] = File()):
     logger.info(f"Got /api/v1/images_embeddings request")
     emb = model.encode_images(images)

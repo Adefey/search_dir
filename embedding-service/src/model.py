@@ -47,7 +47,11 @@ class Model:
         Process texts into embeddings
         """
         logger.info(f"Start encoding texts")
-        inputs = self.processor(text=texts, return_tensors="pt", padding="max_length")
+        inputs = self.processor(
+            text=texts,
+            return_tensors="pt",
+            padding="max_length",
+        )
         with torch.no_grad():
             text_features = self.model.get_text_features(**inputs).to(self.device)
         result = text_features.numpy().tolist()
@@ -60,7 +64,11 @@ class Model:
         """
         logger.info(f"Start encoding images")
         image_list = [Image.open(io.BytesIO(image)) for image in images]
-        inputs = self.processor(images=image_list, return_tensors="pt", padding="max_length")
+        inputs = self.processor(
+            images=image_list,
+            return_tensors="pt",
+            padding="max_length",
+        )
         with torch.no_grad():
             image_features = self.model.get_image_features(**inputs).to(self.device)
         result = image_features.numpy().tolist()

@@ -18,6 +18,16 @@ services:
       - ./example_data:/data
     env_file: "global_config.env"
 
+  file-discovery-service:
+    build: ./file-discovery-service
+    container_name: file-discovery-service
+    ports:
+      - 8003:8000
+    volumes:
+      - ./logs:/app/logs
+      - ./example_data:/data
+    env_file: "global_config.env"
+
   qdrant:
     image: qdrant/qdrant:latest
     restart: always
