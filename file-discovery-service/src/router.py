@@ -35,6 +35,7 @@ def producer():
             full_filename = os.path.join(root, fname)
             logger.info(f"[PRODUCER] found file {full_filename}")
             redis.rpush("queue", full_filename)
+    logger.info(f"[PRODUCER] exited")
 
 
 def consumer():
@@ -43,7 +44,7 @@ def consumer():
     while True:
         filename = redis.rpop("queue")
 
-        logger.info(f"[CONSUMER] retrieved file {filename}")
+        logger.info(f"[CONSUMER] retrieved file {filename.split("/")[-1]}")
 
         if filename is not None:
             files.append(filename)
@@ -74,8 +75,8 @@ def consumer():
 
 
 def walk_filesystem_and_send_to_index():
-    Thread(target=producer, daemon=True).start()
     Thread(target=consumer, daemon=True).start()
+    Thread(target=producer, daemon=True).start()
 
 
 @app.post("/api/v1/start_discovery")
