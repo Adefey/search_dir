@@ -48,7 +48,7 @@ def consumer():
         if filename is not None:
             files.append(filename)
 
-        if len(files) == BATCH_SIZE or filename is None:
+        if len(files) >= BATCH_SIZE or filename is None:
             logger.info(f"[CONSUMER] Found {len(files)} files")
             if files:
                 logger.info(f"[CONSUMER] Sending http://{MAIN_SERVICE_URL}/api/v1/index")
