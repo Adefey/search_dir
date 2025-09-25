@@ -18,15 +18,31 @@ class Model:
         self.processor = CLIPProcessor.from_pretrained(self.model_checkpoint, use_fast=False)
         logger.info(f"Finished setting up model {self.model_checkpoint} on {self.device}")
 
+    def _encode(self, inputs: dict) -> list[float]:
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        with torch.no_grad():
+            if 'pixel_values' in inputs:
+                features = self.model.get_image_features(**inputs)
+            else:
+                features = self.model.get_text_features(**inputs)
+        
+        result = features.cpu().numpy().tolist()
+
+        del inputs
+        del features
+        if self.device == "cuda":
+            torch.cuda.empty_cache()
+            
+        return result
+
+
     def encode_text(self, text: str) -> list[float]:
         """
         Process text into embedding
         """
         logger.info(f"Start encoding text")
         inputs = self.processor(text=text, return_tensors="pt")
-        with torch.no_grad():
-            text_features = self.model.get_text_features(**inputs).to(self.device)
-        result = text_features.numpy().tolist()[0]
+        result = self._encode(inputs)[0]
         logger.info(f"Finished encoding text")
         return result
 
@@ -37,9 +53,9 @@ class Model:
         logger.info(f"Start encoding image")
         image = Image.open(io.BytesIO(image))
         inputs = self.processor(images=image, return_tensors="pt")
-        with torch.no_grad():
-            image_features = self.model.get_image_features(**inputs).to(self.device)
-        result = image_features.numpy().tolist()[0]
+        result = self._encode(inputs)[0]
+        image.close()
+        del image
         logger.info(f"Finished encoding image")
         return result
 
@@ -51,11 +67,10 @@ class Model:
         inputs = self.processor(
             text=texts,
             return_tensors="pt",
-            padding="max_length",
+            padding=True,
+            truncation=True,
         )
-        with torch.no_grad():
-            text_features = self.model.get_text_features(**inputs).to(self.device)
-        result = text_features.numpy().tolist()
+        result = self._encode(inputs)
         logger.info(f"Finished encoding texts")
         return result
 
@@ -68,10 +83,10 @@ class Model:
         inputs = self.processor(
             images=image_list,
             return_tensors="pt",
-            padding="max_length",
+            padding=True,
         )
-        with torch.no_grad():
-            image_features = self.model.get_image_features(**inputs).to(self.device)
-        result = image_features.numpy().tolist()
+        result = self._encode(inputs)
+        for image in image_list:
+            image.close()
         logger.info(f"Finished encoding images")
         return result
