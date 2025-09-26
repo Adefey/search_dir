@@ -20,13 +20,13 @@ class Model:
 
     def _encode(self, inputs: dict) -> list[float]:
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        with torch.no_grad():
-            if 'pixel_values' in inputs:
-                features = self.model.get_image_features(**inputs)
-            else:
-                features = self.model.get_text_features(**inputs)
+       
+        if 'pixel_values' in inputs:
+            features = self.model.get_image_features(**inputs)
+        else:
+            features = self.model.get_text_features(**inputs)
         
-        result = features.cpu().numpy().tolist()
+        result = features.cpu().detach().numpy().tolist()
 
         del inputs
         del features
@@ -41,8 +41,9 @@ class Model:
         Process text into embedding
         """
         logger.info(f"Start encoding text")
-        inputs = self.processor(text=text, return_tensors="pt")
-        result = self._encode(inputs)[0]
+        with torch.inference_mode():
+            inputs = self.processor(text=text, return_tensors="pt")
+            result = self._encode(inputs)[0]
         logger.info(f"Finished encoding text")
         return result
 
@@ -52,8 +53,9 @@ class Model:
         """
         logger.info(f"Start encoding image")
         image = Image.open(io.BytesIO(image))
-        inputs = self.processor(images=image, return_tensors="pt")
-        result = self._encode(inputs)[0]
+        with torch.inference_mode():
+            inputs = self.processor(images=image, return_tensors="pt")
+            result = self._encode(inputs)[0]
         image.close()
         del image
         logger.info(f"Finished encoding image")
@@ -64,13 +66,14 @@ class Model:
         Process texts into embeddings
         """
         logger.info(f"Start encoding texts")
-        inputs = self.processor(
-            text=texts,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-        )
-        result = self._encode(inputs)
+        with torch.inference_mode():
+            inputs = self.processor(
+                text=texts,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+            )
+            result = self._encode(inputs)
         logger.info(f"Finished encoding texts")
         return result
 
@@ -80,12 +83,13 @@ class Model:
         """
         logger.info(f"Start encoding images")
         image_list = [Image.open(io.BytesIO(image)) for image in images]
-        inputs = self.processor(
-            images=image_list,
-            return_tensors="pt",
-            padding=True,
-        )
-        result = self._encode(inputs)
+        with torch.inference_mode():
+            inputs = self.processor(
+                images=image_list,
+                return_tensors="pt",
+                padding=True,
+            )
+            result = self._encode(inputs)
         for image in image_list:
             image.close()
         logger.info(f"Finished encoding images")
