@@ -1,9 +1,15 @@
 import io
 import logging
+import ctypes
 
 import torch
 from PIL import Image
 from transformers import CLIPModel, CLIPProcessor
+
+
+def trim_memory():
+  libc = ctypes.CDLL("libc.so.6")
+  return libc.malloc_trim(0)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +38,9 @@ class Model:
         del features
         if self.device == "cuda":
             torch.cuda.empty_cache()
+
+        # ??????????
+        trim_memory()
 
         return result
 

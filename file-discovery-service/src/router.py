@@ -64,7 +64,9 @@ def consumer():
                         f"[CONSUMER] http://{MAIN_SERVICE_URL}/api/v1/index returned status"
                         f" {resp.status_code}"
                     )
-                    logger.info("[CONSUMER] Will retry the operation")
+                    logger.info("[CONSUMER] Drop buffer with potential problematic data")
+                    files = []
+                    logger.info("[CONSUMER] Buffer is cleared")
                 else:
                     files = []
                     logger.info("[CONSUMER] Buffer is cleared")
