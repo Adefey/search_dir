@@ -26,7 +26,7 @@ app = FastAPI(title="File Discovery Microservise")
 redis = Redis(host="redis", port=6379, decode_responses=True)
 
 MAIN_SERVICE_URL = os.environ.get("MAIN_SERVICE_ADDRESS", "")
-BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 20))
+BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 30))
 
 
 def producer():
