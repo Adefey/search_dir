@@ -1,10 +1,11 @@
 import ctypes
 import io
 import logging
+import os
 
 import torch
 from PIL import Image
-from transformers import CLIPModel, CLIPProcessor
+from transformers import AutoModel, AutoProcessor
 
 
 def trim_memory():
@@ -19,10 +20,11 @@ class Model:
 
     def __init__(self):
         self.model_checkpoint = "openai/clip-vit-base-patch32"
+        os.system("transformers env")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Start setting up model {self.model_checkpoint} on {self.device}")
-        self.model = CLIPModel.from_pretrained(self.model_checkpoint).to(self.device)
-        self.processor = CLIPProcessor.from_pretrained(self.model_checkpoint, use_fast=False)
+        self.model = AutoModel.from_pretrained(self.model_checkpoint).to(self.device)
+        self.processor = AutoProcessor.from_pretrained(self.model_checkpoint, use_fast=False)
         logger.info(f"Finished setting up model {self.model_checkpoint} on {self.device}")
 
     def _encode(self, inputs: dict) -> list[float]:
@@ -41,7 +43,7 @@ class Model:
             torch.cuda.empty_cache()
 
         # ??????????
-        trim_memory()
+        # trim_memory()
 
         return result
 
@@ -66,7 +68,6 @@ class Model:
             inputs = self.processor(images=image, return_tensors="pt")
             result = self._encode(inputs)[0]
         image.close()
-        del image
         logger.info(f"Finished encoding image")
         return result
 
