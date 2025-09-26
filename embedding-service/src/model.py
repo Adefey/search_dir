@@ -20,21 +20,20 @@ class Model:
 
     def _encode(self, inputs: dict) -> list[float]:
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
-       
-        if 'pixel_values' in inputs:
+
+        if "pixel_values" in inputs:
             features = self.model.get_image_features(**inputs)
         else:
             features = self.model.get_text_features(**inputs)
-        
+
         result = features.cpu().detach().numpy().tolist()
 
         del inputs
         del features
         if self.device == "cuda":
             torch.cuda.empty_cache()
-            
-        return result
 
+        return result
 
     def encode_text(self, text: str) -> list[float]:
         """
