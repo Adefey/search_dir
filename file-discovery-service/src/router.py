@@ -14,9 +14,7 @@ logging.basicConfig(
     format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
     datefmt="%H:%M:%S",
     handlers=[
-        logging.FileHandler(
-            filename=f'logs/file_discovery_{datetime.now().strftime("%y_%m_%d_%H:%M:%S")}.log'
-        ),
+        logging.FileHandler(filename=f'logs/file_discovery_{datetime.now().strftime("%y_%m_%d_%H:%M:%S")}.log'),
         logging.StreamHandler(stream=sys.stdout),
     ],
 )
@@ -61,8 +59,7 @@ def consumer():
 
                 if resp.status_code != 200:
                     logger.error(
-                        f"[CONSUMER] http://{MAIN_SERVICE_URL}/api/v1/index returned status"
-                        f" {resp.status_code}"
+                        f"[CONSUMER] http://{MAIN_SERVICE_URL}/api/v1/index returned status {resp.status_code}"
                     )
                     logger.info("[CONSUMER] Drop buffer with potential problematic data")
                     files = []

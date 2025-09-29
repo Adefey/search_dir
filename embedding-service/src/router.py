@@ -12,9 +12,7 @@ logging.basicConfig(
     format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
     datefmt="%H:%M:%S",
     handlers=[
-        logging.FileHandler(
-            filename=f'logs/embedding_service_{datetime.now().strftime("%y_%m_%d_%H:%M:%S")}.log'
-        ),
+        logging.FileHandler(filename=f'logs/embedding_service_{datetime.now().strftime("%y_%m_%d_%H:%M:%S")}.log'),
         logging.StreamHandler(stream=sys.stdout),
     ],
 )

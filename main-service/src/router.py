@@ -6,37 +6,37 @@ import uuid
 from datetime import datetime
 
 import requests
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, File, HTTPException, status
 from models import IndexRequestModel, ResponsePathsModel, ScoredFileModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
     datefmt="%H:%M:%S",
     handlers=[
-        logging.FileHandler(
-            filename=f'logs/main_service_{datetime.now().strftime("%y_%m_%d_%H:%M:%S")}.log'
-        ),
+        logging.FileHandler(filename=f'logs/main_service_{datetime.now().strftime("%y_%m_%d_%H:%M:%S")}.log'),
         logging.StreamHandler(stream=sys.stdout),
     ],
 )
+EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "")
+EMBEDDING_SIZE = int(os.environ.get("EMBEDDING_SIZE", "512"))
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Main Microservise")
 qdrant = QdrantClient(host="qdrant", port=6333)
 if not qdrant.collection_exists("files"):
+    logger.info(f"Creating db 'files' with embedding size {EMBEDDING_SIZE}")
     qdrant.create_collection(
         collection_name="files",
-        vectors_config=VectorParams(size=512, distance=Distance.COSINE),
+        vectors_config=VectorParams(size=EMBEDDING_SIZE, distance=Distance.COSINE),
     )
-EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "")
 
 
-@app.get("/api/v1/files", response_model=ResponsePathsModel)
-def get_files(query: str, top_n: int = 5):
-    logger.info(f"Got /api/v1/files request")
+@app.get("/api/v1/text_search", response_model=ResponsePathsModel)
+def get_text_search(query: str, top_n: int = 5):
+    logger.info(f"Got /get_text_search request")
     resp = requests.post(
         f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding",
         json={"text": query},
@@ -44,10 +44,7 @@ def get_files(query: str, top_n: int = 5):
     if resp.status_code != status.HTTP_200_OK:
         raise HTTPException(
             status_code=500,
-            detail=(
-                f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status"
-                f" {resp.status_code}"
-            ),
+            detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status {resp.status_code}",
         )
     embedding = resp.json()["embedding"]
     result = qdrant.query_points(
@@ -58,7 +55,32 @@ def get_files(query: str, top_n: int = 5):
     response = ResponsePathsModel(
         files=[ScoredFileModel(file=item.payload["path"], score=item.score) for item in result]
     )
-    logger.info(f"Finished /api/v1/files")
+    logger.info(f"Finished get_text_search")
+    return response
+
+
+@app.post("/api/v1/image_search", response_model=ResponsePathsModel)
+def post_image_search(image: bytes = File(), top_n: int = 5):
+    logger.info(f"Got /get_image_search request")
+    resp = requests.post(
+        f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding",
+        files=[("image", image)],
+    )
+    if resp.status_code != status.HTTP_200_OK:
+        raise HTTPException(
+            status_code=500,
+            detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding returned status {resp.status_code}",
+        )
+    embedding = resp.json()["embedding"]
+    result = qdrant.query_points(
+        collection_name="files",
+        query=embedding,
+        limit=top_n,
+    ).points
+    response = ResponsePathsModel(
+        files=[ScoredFileModel(file=item.payload["path"], score=item.score) for item in result]
+    )
+    logger.info(f"Finished get_image_search")
     return response
 
 
@@ -95,10 +117,7 @@ def post_index(request: IndexRequestModel):
         if resp.status_code != status.HTTP_200_OK:
             raise HTTPException(
                 status_code=500,
-                detail=(
-                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings returned status"
-                    f" {resp.status_code}"
-                ),
+                detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings returned status {resp.status_code}",
             )
         embeddings = resp.json()["embeddings"]
         processed_images = list(zip(images, embeddings))
@@ -118,10 +137,7 @@ def post_index(request: IndexRequestModel):
         if resp.status_code != status.HTTP_200_OK:
             raise HTTPException(
                 status_code=500,
-                detail=(
-                    f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings returned status"
-                    f" {resp.status_code}"
-                ),
+                detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings returned status {resp.status_code}",
             )
         embeddings = resp.json()["embeddings"]
         processed_texts = list(zip(texts, embeddings))

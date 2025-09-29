@@ -1,9 +1,12 @@
+import os
+
 from pydantic import BaseModel, Field
+
+EMBEDDING_SIZE = int(os.environ.get("EMBEDDING_SIZE", "512"))
 
 
 class RequestTextModel(BaseModel):
-    # 77 tokens
-    text: str = Field(max_length=500)
+    text: str = Field(max_length=2048)
 
 
 class RequestTextsModel(BaseModel):
@@ -12,7 +15,7 @@ class RequestTextsModel(BaseModel):
 
 
 class ResponseEmbeddingModel(BaseModel):
-    embedding: list[float] = Field(min_length=512, max_length=512)
+    embedding: list[float] = Field(min_length=EMBEDDING_SIZE, max_length=EMBEDDING_SIZE)
 
 
 class ResponseEmbeddingsModel(BaseModel):

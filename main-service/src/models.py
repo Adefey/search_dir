@@ -7,8 +7,8 @@ class IndexRequestModel(BaseModel):
 
 class ScoredFileModel(BaseModel):
     file: FilePath
-    score: float = Field(ge=0, le=1)
+    score: float = Field(ge=-1, le=1)
 
 
 class ResponsePathsModel(BaseModel):
-    files: list[ScoredFileModel] = Field(max_length=512)
+    files: list[ScoredFileModel] = Field(max_length=2048)
