@@ -1,18 +1,21 @@
 import logging
-import mimetypes
 import os
 import sys
-import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime
+from hashlib import sha256
+from threading import Thread
 
 import requests
 from fastapi import FastAPI, File, HTTPException, status
 from models import IndexRequestModel, ResponsePathsModel, ScoredFileModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
+from redis import Redis
+from utils import consumer, index_processor
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
     datefmt="%H:%M:%S",
     handlers=[
@@ -24,8 +27,20 @@ EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "")
 EMBEDDING_SIZE = int(os.environ.get("EMBEDDING_SIZE", "512"))
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="Main Microservise")
+
 qdrant = QdrantClient(host="qdrant", port=6333)
+redis = Redis(host="redis", port=6379, decode_responses=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Thread(target=consumer, args=(redis, qdrant), daemon=True).start()
+
+    yield
+
+
+app = FastAPI(title="Main Microservise", lifespan=lifespan)
+
 if not qdrant.collection_exists("files"):
     logger.info(f"Creating db 'files' with embedding size {EMBEDDING_SIZE}")
     qdrant.create_collection(
@@ -88,75 +103,13 @@ def post_image_search(image: bytes = File(), top_n: int = 5):
 def post_index(request: IndexRequestModel):
     logger.info(f"Got /api/v1/index request")
     file_paths = request.files
-    # Separate files into texts and images
-    images = []
-    texts = []
-    for file_path in file_paths:
-        file_type, _ = mimetypes.guess_file_type(file_path)
-        if "image" in file_type:
-            images.append(file_path)
-            logger.debug(f"File {file_path} is image")
-        elif "text" in file_type:
-            texts.append(file_path)
-            logger.debug(f"File {file_path} is text")
-        else:
-            logger.warning(f"File {file_path} is not supported")
 
-    logger.debug(f"{images=} {texts=}")
-
-    # Get embeddings for images
-    images_payload = []
-    for image in images:
-        with open(image, "rb") as file:
-            images_payload.append(("images", file.read()))
-    if images_payload:
-        resp = requests.post(
-            f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings",
-            files=images_payload,
+    try:
+        index_processor(file_paths, qdrant)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
         )
-        if resp.status_code != status.HTTP_200_OK:
-            raise HTTPException(
-                status_code=500,
-                detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings returned status {resp.status_code}",
-            )
-        embeddings = resp.json()["embeddings"]
-        processed_images = list(zip(images, embeddings))
-    else:
-        processed_images = []
-
-    # Get embeddings for texts
-    texts_payload = []
-    for text in texts:
-        with open(text) as file:
-            texts_payload.append(file.read())
-    if texts_payload:
-        resp = requests.post(
-            f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings",
-            json={"texts": texts_payload},
-        )
-        if resp.status_code != status.HTTP_200_OK:
-            raise HTTPException(
-                status_code=500,
-                detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings returned status {resp.status_code}",
-            )
-        embeddings = resp.json()["embeddings"]
-        processed_texts = list(zip(texts, embeddings))
-    else:
-        processed_texts = []
-
-    logger.debug(f"{processed_images=} {processed_texts=}")
-    logger.info(f"Processed {len(processed_images)} images and {len(processed_texts)}")
-
-    qdrant.upload_points(
-        "files",
-        points=[
-            PointStruct(
-                id=str(uuid.uuid4()),
-                vector=emb,
-                payload={"path": path},
-            )
-            for path, emb in processed_images + processed_texts
-        ],
-    )
 
     logger.info(f"Finished /api/v1/index request")
