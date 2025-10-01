@@ -83,7 +83,7 @@ def post_search(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Incorrect request, got exception: {str(exc)}",
         )
-    except RuntimeError:
+    except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error while processing request, got exception: {str(exc)}",

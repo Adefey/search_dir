@@ -11,7 +11,7 @@ from model import Model
 from models import ResponseEmbeddingOnlyModel, ResponseFileEmbeddingModel, ResponseFileEmbeddingsModel
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s",
     datefmt="%H:%M:%S",
     handlers=[
@@ -65,7 +65,7 @@ def post_text_embedding(text: str = Form(), _trim_task: None = Depends(manage_me
     Get embedding from text
     """
     logger.info(f"Got /api/v1/text_embedding request")
-
+    logger.info(f"{text=} {type(text)=}")
     try:
         embedding = model.encode_text(text)
     except Exception as exc:
@@ -145,7 +145,7 @@ def post_file_embeddings(files: list[UploadFile], _trim_task: None = Depends(man
             logger.warning(f"File {filename} misses MIME type suffix")
 
         if "text" in mime_type:
-            texts.append((filename, content.decode()))
+            texts.append((filename, content.decode("utf-8", errors="ignore")))
         elif "image" in mime_type:
             images.append((filename, content))
         else:

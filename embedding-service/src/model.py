@@ -71,8 +71,6 @@ class Model:
 
         result = features.cpu().detach().numpy().tolist()
 
-        del inputs
-        del features
         if self.device == "cuda":
             torch.cuda.empty_cache()
 
@@ -86,7 +84,7 @@ class Model:
         with torch.inference_mode():
             inputs = self.processor(
                 text=[text],
-                padding="max_length",
+                padding=True,
                 truncation=True,
                 return_tensors="pt",
             )
@@ -122,14 +120,14 @@ class Model:
             inputs = self.processor(
                 text=texts,
                 return_tensors="pt",
-                padding="max_length",
+                padding=True,
                 truncation=True,
             )
             result = self._encode(inputs)
 
         logger.info(f"Finished encoding texts")
 
-        return zip(filenames, result)
+        return list(zip(filenames, result))
 
     def encode_image_files(self, image_files: list[tuple[str, bytes]]) -> list[list[float]]:
         """
@@ -156,4 +154,4 @@ class Model:
 
         logger.info(f"Finished encoding images")
 
-        return zip(filenames, result)
+        return list(zip(filenames, result))

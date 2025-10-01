@@ -1,6 +1,7 @@
 services:
   embedding-service:
     build: ./embedding-service
+    restart: always
     container_name: embedding-service
     ports:
       - 8001:8000
@@ -10,6 +11,7 @@ services:
 
   main-service:
     build: ./main-service
+    restart: always
     container_name: main-service
     ports:
       - 8002:8000
@@ -20,6 +22,7 @@ services:
 
   file-discovery-service:
     build: ./file-discovery-service
+    restart: always
     container_name: file-discovery-service
     ports:
       - 8003:8000

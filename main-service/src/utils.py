@@ -47,7 +47,7 @@ def consumer(redis: Redis, qdrant: QdrantClient):
         elif action == ACTION_DELETE_ID:
             # Fast delete, no waiting
             logger.info(f"Removing file {filename} from index")
-            remove_file(filename)
+            remove_file(filename, qdrant)
 
         if len(index_files) >= BATCH_SIZE or filename is None:
             logger.info(f"[CONSUMER] Found {len(index_files)} files")
@@ -142,10 +142,7 @@ def search(
     logger.info(f"Got search request ")
 
     if text_query:
-        resp = requests.post(
-            f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding",
-            json={"text": text_query},
-        )
+        resp = requests.post(f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding", data={"text": text_query})
         if resp.status_code != status.HTTP_200_OK:
             raise RuntimeError(
                 f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status {resp.status_code}",
