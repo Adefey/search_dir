@@ -1,3 +1,4 @@
+autoflake==2.3.1
 black==25.9.0
 fastapi==0.117.1
 huggingface-hub==0.35.1

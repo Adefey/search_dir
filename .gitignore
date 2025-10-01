@@ -1,7 +1,7 @@
 qdrant_data
 redis_cache
 logs/*
-data/*
+data*
 !data/applejack.png
 !data/fluttershy.jpg
 !data/pinkie_pie.jpg 

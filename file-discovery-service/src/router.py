@@ -4,9 +4,8 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 from threading import Thread
-from time import sleep, time
 
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import FastAPI
 from redis import Redis
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -21,16 +20,21 @@ logging.basicConfig(
     ],
 )
 
+QUEUE_NAME = os.environ.get("QUEUE_NAME", "queue")
+METADATA_HASH_KEY = "file_metadata"
+MONITOR_PATH = "/data"
+ACTION_CREATE_ID = int(os.environ.get("ACTION_CREATE_ID", "1"))
+ACTION_UPDATE_ID = int(os.environ.get("ACTION_UPDATE_ID", "2"))
+ACTION_DELETE_ID = int(os.environ.get("ACTION_DELETE_ID", "3"))
+
 logger = logging.getLogger(__name__)
 redis = Redis(host="redis", port=6379, decode_responses=True)
 
-QUEUE_NAME = os.environ.get("QUEUE_NAME", "queue")
-FILE_RELEVANT_SECONDS = int(os.environ.get("FILE_RELEVANT_SECONDS", 21600))
-METADATA_HASH_KEY = "file_metadata"
-MONITOR_PATH = "/data"
 
-
-def lpush_wrapper(file_path: str):
+def lpush_wrapper(file_path: str, action: int):
+    """
+    Check file and add to queue
+    """
     try:
         file_mtime = int(os.path.getmtime(file_path))
     except FileNotFoundError:
@@ -44,43 +48,63 @@ def lpush_wrapper(file_path: str):
         return
 
     redis.hset(METADATA_HASH_KEY, file_path, file_mtime)
-    redis.lpush(QUEUE_NAME, file_path)
-    logger.info(f"[PRODUCER] File {file_path} was added")
+    redis.lpush(QUEUE_NAME, f"{file_path},{action}")
+    logger.info(f"[PRODUCER] File {file_path} was added, action: {action}")
 
 
 class FileChangeHandler(FileSystemEventHandler):
+    """
+    Observer to check file updates in real time
+    """
+
     def on_created(self, event):
         if not event.is_directory:
-            logger.info(f"[WATCHER] New file detected: {event.src_path}")
-            lpush_wrapper(event.src_path)
+            logger.info(f"[WATCHER] Found file {event.src_path}")
+            lpush_wrapper(event.src_path, ACTION_CREATE_ID)
 
     def on_modified(self, event):
         if not event.is_directory:
-            logger.info(f"[WATCHER] File modified: {event.src_path}")
-            lpush_wrapper(event.src_path)
+            logger.info(f"[WATCHER] Found file change {event.src_path}")
+            lpush_wrapper(event.src_path, ACTION_UPDATE_ID)
+
+    def on_deleted(self, event):
+        if not event.is_directory:
+            logger.info(f"[WATCHER] Found file deleted {event.src_path}")
+            lpush_wrapper(event.src_path, ACTION_DELETE_ID)
 
 
 def producer():
+    """
+    Endless function that runs in background, exists if observer got error
+    """
     logger.info(f"[PRODUCER] sends all files to indexation")
     for root, _, fnames in os.walk(MONITOR_PATH):
         for fname in fnames:
             full_filename = os.path.join(root, fname)
-            logger.info(f"[PRODUCER] found file {full_filename}")
-            lpush_wrapper(full_filename)
-    logger.info(f"[PRODUCER] starting watchdog")
+            logger.info(f"[PRODUCER] Found file {full_filename}")
+            lpush_wrapper(full_filename, ACTION_CREATE_ID)
+    logger.info(f"[PRODUCER] Starting watchdog")
     observer = Observer()
     observer.schedule(FileChangeHandler(), MONITOR_PATH, recursive=True)
     observer.start()
-    logger.info(f"[PRODUCER] started watchdog")
+    logger.info(f"[PRODUCER] Started watchdog")
     observer.join()
-    logger.info(f"[PRODUCER] exited")
+    logger.info(f"[PRODUCER] Exited (Probably watchdog error)")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """
+    Run producer in background
+    """
     Thread(target=producer, daemon=True).start()
 
     yield
 
 
-app = FastAPI(title="File Discovery Microservise", lifespan=lifespan)
+app = FastAPI(
+    title="File Discovery Microservise",
+    description="Microservice used to scan directory and send file updates to main service",
+    version=os.environ.get("APP_VERSION", "0.1"),
+    lifespan=lifespan,
+)

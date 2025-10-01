@@ -13,20 +13,32 @@ logger = logging.getLogger(__name__)
 class Model:
 
     def __init__(self):
+        """
+        Prepare the AutoModel and AutoProcessor
+        """
         self.model_checkpoint = os.environ.get("EMBEDDING_MODEL_CHECKPOINT", "openai/clip-vit-base-patch32")
         self.image_resolution = os.environ.get("TARGET_IMAGE_SIZE", "224,224").split(",")
-        self.image_resolution = (int(self.image_resolution[0]), int(self.image_resolution[1]))
+        self.image_resolution = (
+            int(self.image_resolution[0]),
+            int(self.image_resolution[1]),
+        )
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Start setting up model {self.model_checkpoint} on {self.device}")
         self.model = AutoModel.from_pretrained(self.model_checkpoint, trust_remote_code=True, cache_dir="/model").to(
             self.device
         )
         self.processor = AutoProcessor.from_pretrained(
-            self.model_checkpoint, trust_remote_code=True, cache_dir="/model", use_fast=False
+            self.model_checkpoint,
+            trust_remote_code=True,
+            cache_dir="/model",
+            use_fast=False,
         )
         logger.info(f"Finished setting up model {self.model_checkpoint} on {self.device}")
 
     def _preprocess_image(self, image: bytes):
+        """
+        Ensure that image is RGB and correctly transposed, resize to target model input size
+        """
         image = Image.open(io.BytesIO(image))
         ImageOps.exif_transpose(image, in_place=True)
         image = image.convert("RGB")
@@ -44,6 +56,9 @@ class Model:
         return new_image
 
     def _encode(self, inputs: dict) -> list[float]:
+        """
+        Encode text or image based on inputs dict, normalize result
+        """
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
 
         if "pixel_values" in inputs:
@@ -69,7 +84,12 @@ class Model:
         """
         logger.info(f"Start encoding text")
         with torch.inference_mode():
-            inputs = self.processor(text=[text], padding=True, truncation=True, return_tensors="pt")
+            inputs = self.processor(
+                text=[text],
+                padding="max_length",
+                truncation=True,
+                return_tensors="pt",
+            )
             result = self._encode(inputs)[0]
         logger.info(f"Finished encoding text")
         return result
@@ -87,27 +107,42 @@ class Model:
         logger.info(f"Finished encoding image")
         return result
 
-    def encode_texts(self, texts: list[str]) -> list[list[float]]:
+    def encode_text_files(self, text_files: list[tuple[str, str]]) -> list[list[float]]:
         """
-        Process texts into embeddings
+        Process list of tuples (filename, text) into tuples (filename, embedding)
         """
         logger.info(f"Start encoding texts")
+        if not text_files:
+            logger.info(f"No texts, return empty list")
+            return []
+
+        filenames, texts = list(zip(*text_files))
+
         with torch.inference_mode():
             inputs = self.processor(
                 text=texts,
                 return_tensors="pt",
-                padding=True,
+                padding="max_length",
                 truncation=True,
             )
             result = self._encode(inputs)
-        logger.info(f"Finished encoding texts")
-        return result
 
-    def encode_images(self, images: list[bytes]) -> list[list[float]]:
+        logger.info(f"Finished encoding texts")
+
+        return zip(filenames, result)
+
+    def encode_image_files(self, image_files: list[tuple[str, bytes]]) -> list[list[float]]:
         """
-        Process images into embeddings
+        Process list of tuples (filename, raw_image_bytes) into tuples (filename, embedding)
         """
         logger.info(f"Start encoding images")
+
+        if not image_files:
+            logger.info(f"No images, return empty list")
+            return []
+
+        filenames, images = list(zip(*image_files))
+
         image_list = [self._preprocess_image(image) for image in images]
         with torch.inference_mode():
             inputs = self.processor(
@@ -115,7 +150,10 @@ class Model:
                 return_tensors="pt",
             )
             result = self._encode(inputs)
+
         for image in image_list:
             image.close()
+
         logger.info(f"Finished encoding images")
-        return result
+
+        return zip(filenames, result)

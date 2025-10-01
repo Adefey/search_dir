@@ -1,5 +1,4 @@
 import logging
-import mimetypes
 import os
 from hashlib import sha256
 from time import sleep
@@ -7,148 +6,136 @@ from uuid import UUID
 
 import requests
 from fastapi import status
-from models import IndexRequestModel
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from qdrant_client.models import PointIdsList, PointStruct
 from redis import Redis
 
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 30))
+WAIT_TIME_SEC = 30
+CONNECTION_ERROR_WAIT_TIME_SEC = 5
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "queue")
+QDRANT_COLLECTION_NAME = os.environ.get("QDRANT_COLLECTION_NAME", "files")
 EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "")
+ACTION_CREATE_ID = int(os.environ.get("ACTION_CREATE_ID", "1"))
+ACTION_UPDATE_ID = int(os.environ.get("ACTION_UPDATE_ID", "2"))
+ACTION_DELETE_ID = int(os.environ.get("ACTION_DELETE_ID", "3"))
 logger = logging.getLogger(__name__)
 
 
 def consumer(redis: Redis, qdrant: QdrantClient):
-    files = []
+    """
+    Endless function that runs in background to get jobs from queue
+    """
+    index_files = []
 
     server_io_success = True
 
     while True:
+        action = None
         filename = None
         if server_io_success:
-            queue_filename = redis.brpop(QUEUE_NAME, timeout=30)
-            if queue_filename is not None:
-                _, filename = queue_filename
+            queue_element = redis.brpop(QUEUE_NAME, timeout=WAIT_TIME_SEC)
+            if queue_element is not None:
+                _, queue_element = queue_element
+                queue_element = queue_element.split(",")
+                filename, action = queue_element[0], int(queue_element[1])
 
-        logger.info(f"[CONSUMER] retrieved file {filename}")
+        logger.info(f"[CONSUMER] retrieved file {filename}, action: {action}")
 
-        if filename is not None:
-            files.append(filename)
+        if filename is not None and action in (ACTION_CREATE_ID, ACTION_UPDATE_ID):
+            index_files.append(filename)
+        elif action == ACTION_DELETE_ID:
+            # Fast delete, no waiting
+            logger.info(f"Removing file {filename} from index")
+            remove_file(filename)
 
-        if len(files) >= BATCH_SIZE or filename is None:
-            logger.info(f"[CONSUMER] Found {len(files)} files")
-            if files:
+        if len(index_files) >= BATCH_SIZE or filename is None:
+            logger.info(f"[CONSUMER] Found {len(index_files)} files")
+            if index_files:
                 logger.info(f"[CONSUMER] Sending to index")
 
                 try:
-                    index_processor(files, qdrant)
+                    index_processor(index_files, qdrant)
                     logger.info("[CONSUMER] Index is processed")
-                    files = []
+                    index_files = []
                     logger.info("[CONSUMER] Buffer is cleared")
                     server_io_success = True
                 except RuntimeError as exc:
-                    logger.error(f"[CONSUMER] Drop buffer with potential problematic data and retry ({exc})")
-                    files = []
+                    logger.error(f"[CONSUMER] Drop buffer with potential problematic data: ({exc})")
+                    index_files = []
                     logger.info("[CONSUMER] Buffer is cleared")
                     server_io_success = True
                 except requests.exceptions.ConnectionError as exc:
-                    logger.error(f"[CONSUMER] service call failed ({exc}), will retry in 5 sec")
+                    logger.error(
+                        f"[CONSUMER] service call failed ({exc}), will retry in {CONNECTION_ERROR_WAIT_TIME_SEC} sec"
+                    )
                     server_io_success = False
-                    sleep(5)
+                    sleep(CONNECTION_ERROR_WAIT_TIME_SEC)
 
             if filename is None:
                 logger.info("[CONSUMER] No files were retrieved from queue")
 
 
 def index_processor(file_paths: list[str], qdrant: QdrantClient):
+    """
+    Add files to index
+    """
     logger.info(f"Got index request")
-    # Separate files into texts and images
-    images = []
-    texts = []
+
+    files = []
     for file_path in file_paths:
-        file_type, _ = mimetypes.guess_file_type(file_path)
-        if "image" in file_type:
-            images.append(file_path)
-            logger.debug(f"File {file_path} is image")
-        elif "text" in file_type:
-            texts.append(file_path)
-            logger.debug(f"File {file_path} is text")
-        else:
-            logger.warning(f"File {file_path} is not supported")
+        with open(file_path, "rb") as file:
+            files.append(("files", (file_path, file.read())))
 
-    logger.debug(f"{images=} {texts=}")
+    resp = requests.post(f"http://{EMBEDDING_SERVICE_URL}/api/v1/file_embeddings", files=files)
 
-    # Get embeddings for images
-    images_payload = []
-    for image in images:
-        with open(image, "rb") as file:
-            images_payload.append(("images", file.read()))
-    if images_payload:
+    if resp.status_code != 200:
+        raise RuntimeError(f"http://{EMBEDDING_SERVICE_URL}/api/v1/file_embeddings returned status {resp.status_code}")
 
-        resp = requests.post(
-            f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings",
-            files=images_payload,
-        )
+    json_resp = resp.json()
 
-        if resp.status_code != status.HTTP_200_OK:
-            raise RuntimeError(
-                f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings returned status {resp.status_code}",
-            )
-        embeddings = resp.json()["embeddings"]
+    processed_files = []
+    for processed_file in json_resp["file_records"]:
+        processed_files.append((processed_file["file_path"], processed_file["embedding"]))
 
-        if len(images) != len(embeddings):
-            logger.error(f"Consistensy violated {len(images)=} {len(embeddings)=}")
-            raise RuntimeError(f"Consistensy violated {len(images)=} {len(embeddings)=}")
-
-        processed_images = list(zip(images, embeddings))
-    else:
-        processed_images = []
-
-    # Get embeddings for texts
-    texts_payload = []
-    for text in texts:
-        with open(text) as file:
-            texts_payload.append(file.read())
-    if texts_payload:
-
-        resp = requests.post(
-            f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings",
-            json={"texts": texts_payload},
-        )
-
-        if resp.status_code != status.HTTP_200_OK:
-            raise RuntimeError(
-                f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings returned status {resp.status_code}",
-            )
-        embeddings = resp.json()["embeddings"]
-
-        if len(texts) != len(embeddings):
-            logger.error(f"Consistensy violated {len(texts)=} {len(embeddings)=}")
-            raise RuntimeError(f"Consistensy violated {len(texts)=} {len(embeddings)=}")
-
-        processed_texts = list(zip(texts, embeddings))
-    else:
-        processed_texts = []
-
-    logger.debug(f"{processed_images=} {processed_texts=}")
-    logger.info(f"Processed {len(processed_images)} images and {len(processed_texts)}")
+    unprocessed_files = json_resp["unprocessed_files"]
+    if unprocessed_files:
+        logger.error(f"Unprocessed files: {unprocessed_files}")
 
     qdrant.upload_points(
-        "files",
+        QDRANT_COLLECTION_NAME,
         points=[
             PointStruct(
                 id=str(UUID(hex=sha256(path.encode()).hexdigest()[:32])),
                 vector=emb,
                 payload={"path": path},
             )
-            for path, emb in processed_images + processed_texts
+            for path, emb in processed_files
         ],
     )
 
-    logger.info(f"Finished processing index")
+    logger.info(f"Finished index request")
 
 
-def search(qdrant: QdrantClient, top_n: int = 5, text_query: str | None = None, image_query: bytes | None = None):
+def remove_file(file_path: str, qdrant: QdrantClient):
+    """
+    Remove file from index
+    """
+    logger.info(f"Got remove request")
+    file_id = str(UUID(hex=sha256(file_path.encode()).hexdigest()[:32]))
+    qdrant.delete(QDRANT_COLLECTION_NAME, points_selector=PointIdsList(points=[file_id]))
+    logger.info(f"Finished remove request")
+
+
+def search(
+    qdrant: QdrantClient,
+    top_n: int = 5,
+    text_query: str | None = None,
+    image_query: bytes | None = None,
+):
+    """
+    Search files by text and/or image query
+    """
     if text_query is None and image_query is None:
         raise ValueError("Text Query and Image query cannot both be None")
 
@@ -187,7 +174,7 @@ def search(qdrant: QdrantClient, top_n: int = 5, text_query: str | None = None, 
         search_embedding = [(e1 + e2) / 2 for e1, e2 in zip(text_embedding, image_embedding)]
 
     result = qdrant.query_points(
-        collection_name="files",
+        collection_name=QDRANT_COLLECTION_NAME,
         query=search_embedding,
         limit=top_n,
     ).points

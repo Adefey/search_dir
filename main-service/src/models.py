@@ -1,8 +1,12 @@
-from pydantic import BaseModel, Field, FilePath
+from pydantic import BaseModel, FilePath
+
+
+class FilePathModel(BaseModel):
+    file: FilePath
 
 
 class IndexRequestModel(BaseModel):
-    files: list[FilePath] = Field(max_length=50)
+    files: list[FilePath]
 
 
 class ScoredFileModel(BaseModel):
@@ -11,4 +15,4 @@ class ScoredFileModel(BaseModel):
 
 
 class ResponsePathsModel(BaseModel):
-    files: list[ScoredFileModel] = Field(max_length=2048)
+    files: list[ScoredFileModel]
