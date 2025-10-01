@@ -45,6 +45,7 @@ def lpush_wrapper(file_path: str):
 
     redis.hset(METADATA_HASH_KEY, file_path, file_mtime)
     redis.lpush(QUEUE_NAME, file_path)
+    logger.info(f"[PRODUCER] File {file_path} was added")
 
 
 class FileChangeHandler(FileSystemEventHandler):

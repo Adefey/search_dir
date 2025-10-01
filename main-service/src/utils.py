@@ -95,6 +95,11 @@ def index_processor(file_paths: list[str], qdrant: QdrantClient):
                 f"http://{EMBEDDING_SERVICE_URL}/api/v1/images_embeddings returned status {resp.status_code}",
             )
         embeddings = resp.json()["embeddings"]
+
+        if len(images) != len(embeddings):
+            logger.error(f"Consistensy violated {len(images)=} {len(embeddings)=}")
+            raise RuntimeError(f"Consistensy violated {len(images)=} {len(embeddings)=}")
+
         processed_images = list(zip(images, embeddings))
     else:
         processed_images = []
@@ -116,6 +121,11 @@ def index_processor(file_paths: list[str], qdrant: QdrantClient):
                 f"http://{EMBEDDING_SERVICE_URL}/api/v1/texts_embeddings returned status {resp.status_code}",
             )
         embeddings = resp.json()["embeddings"]
+
+        if len(texts) != len(embeddings):
+            logger.error(f"Consistensy violated {len(texts)=} {len(embeddings)=}")
+            raise RuntimeError(f"Consistensy violated {len(texts)=} {len(embeddings)=}")
+
         processed_texts = list(zip(texts, embeddings))
     else:
         processed_texts = []
@@ -136,3 +146,52 @@ def index_processor(file_paths: list[str], qdrant: QdrantClient):
     )
 
     logger.info(f"Finished processing index")
+
+
+def search(qdrant: QdrantClient, top_n: int = 5, text_query: str | None = None, image_query: bytes | None = None):
+    if text_query is None and image_query is None:
+        raise ValueError("Text Query and Image query cannot both be None")
+
+    logger.info(f"Got search request ")
+
+    if text_query:
+        resp = requests.post(
+            f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding",
+            json={"text": text_query},
+        )
+        if resp.status_code != status.HTTP_200_OK:
+            raise RuntimeError(
+                f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status {resp.status_code}",
+            )
+        text_embedding = resp.json()["embedding"]
+
+    if image_query:
+        resp = requests.post(
+            f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding",
+            files=[("image", image_query)],
+        )
+        if resp.status_code != status.HTTP_200_OK:
+            raise RuntimeError(
+                f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding returned status {resp.status_code}",
+            )
+        image_embedding = resp.json()["embedding"]
+
+    if text_query is None:
+        logger.info("Using only image embedding")
+        search_embedding = image_embedding
+    elif image_query is None:
+        logger.info("Using only text embedding")
+        search_embedding = text_embedding
+    else:
+        logger.info("Using average between text and image embeddings")
+        search_embedding = [(e1 + e2) / 2 for e1, e2 in zip(text_embedding, image_embedding)]
+
+    result = qdrant.query_points(
+        collection_name="files",
+        query=search_embedding,
+        limit=top_n,
+    ).points
+    files_and_scores = [(item.payload["path"], item.score) for item in result]
+
+    logger.info(f"Finished search")
+    return files_and_scores

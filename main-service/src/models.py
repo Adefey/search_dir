@@ -7,7 +7,7 @@ class IndexRequestModel(BaseModel):
 
 class ScoredFileModel(BaseModel):
     file: FilePath
-    score: float = Field(ge=-1, le=1)
+    score: float
 
 
 class ResponsePathsModel(BaseModel):

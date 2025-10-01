@@ -1,3 +1,4 @@
+import ctypes
 import logging
 import os
 import sys
@@ -6,13 +7,12 @@ from datetime import datetime
 from hashlib import sha256
 from threading import Thread
 
-import requests
-from fastapi import FastAPI, File, HTTPException, status
+from fastapi import FastAPI, File, Form, HTTPException, status
 from models import IndexRequestModel, ResponsePathsModel, ScoredFileModel
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 from redis import Redis
-from utils import consumer, index_processor
+from utils import consumer, index_processor, search
 
 logging.basicConfig(
     level=logging.INFO,
@@ -49,53 +49,35 @@ if not qdrant.collection_exists("files"):
     )
 
 
-@app.get("/api/v1/text_search", response_model=ResponsePathsModel)
-def get_text_search(query: str, top_n: int = 5):
-    logger.info(f"Got /get_text_search request")
-    resp = requests.post(
-        f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding",
-        json={"text": query},
-    )
-    if resp.status_code != status.HTTP_200_OK:
-        raise HTTPException(
-            status_code=500,
-            detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status {resp.status_code}",
-        )
-    embedding = resp.json()["embedding"]
-    result = qdrant.query_points(
-        collection_name="files",
-        query=embedding,
-        limit=top_n,
-    ).points
-    response = ResponsePathsModel(
-        files=[ScoredFileModel(file=item.payload["path"], score=item.score) for item in result]
-    )
-    logger.info(f"Finished get_text_search")
-    return response
+@app.post("/api/v1/search", response_model=ResponsePathsModel)
+def post_search(
+    text_query: str | None = Form(default=None), image_query: bytes | None = File(default=None), top_n: int = 5
+):
+    logger.info(f"Got /search request")
 
+    # Protection against ''
+    if not text_query:
+        text_query = None
 
-@app.post("/api/v1/image_search", response_model=ResponsePathsModel)
-def post_image_search(image: bytes = File(), top_n: int = 5):
-    logger.info(f"Got /get_image_search request")
-    resp = requests.post(
-        f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding",
-        files=[("image", image)],
-    )
-    if resp.status_code != status.HTTP_200_OK:
+    # Protection against b''
+    if not image_query:
+        image_query = None
+
+    try:
+        result = search(qdrant, top_n, text_query, image_query)
+    except ValueError as exc:
         raise HTTPException(
-            status_code=500,
-            detail=f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding returned status {resp.status_code}",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
         )
-    embedding = resp.json()["embedding"]
-    result = qdrant.query_points(
-        collection_name="files",
-        query=embedding,
-        limit=top_n,
-    ).points
-    response = ResponsePathsModel(
-        files=[ScoredFileModel(file=item.payload["path"], score=item.score) for item in result]
-    )
-    logger.info(f"Finished get_image_search")
+    except RuntimeError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        )
+    response = ResponsePathsModel(files=[ScoredFileModel(file=file, score=score) for file, score in result])
+
+    logger.info(f"Finished /search ")
     return response
 
 
@@ -108,7 +90,7 @@ def post_index(request: IndexRequestModel):
         index_processor(file_paths, qdrant)
     except RuntimeError as exc:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         )
 

@@ -1,4 +1,3 @@
-import ctypes
 import io
 import logging
 import os
@@ -7,12 +6,6 @@ import torch
 import torch.nn.functional as F
 from PIL import Image, ImageOps
 from transformers import AutoModel, AutoProcessor
-
-
-def trim_memory():
-    libc = ctypes.CDLL("libc.so.6")
-    return libc.malloc_trim(0)
-
 
 logger = logging.getLogger(__name__)
 
@@ -35,26 +28,19 @@ class Model:
 
     def _preprocess_image(self, image: bytes):
         image = Image.open(io.BytesIO(image))
-        image = ImageOps.exif_transpose(image)
+        ImageOps.exif_transpose(image, in_place=True)
         image = image.convert("RGB")
-        width, height = image.size
-
-        if width == height:
-            return image.resize(self.image_resolution)
-
-        if width > height:
-            new_width = self.image_resolution[0]
-            new_height = int(height * (new_width / width))
-        else:
-            new_height = self.image_resolution[1]
-            new_width = int(width * (new_height / height))
-
-        resized_image = image.resize((new_width, new_height))
 
         new_image = Image.new("RGB", self.image_resolution, (0, 0, 0))
-        paste_x = (self.image_resolution[0] - new_width) // 2
-        paste_y = (self.image_resolution[1] - new_height) // 2
-        new_image.paste(resized_image, (paste_x, paste_y))
+
+        image.thumbnail(self.image_resolution, Image.Resampling.LANCZOS)
+        paste_x = (self.image_resolution[0] - image.width) // 2
+        paste_y = (self.image_resolution[1] - image.height) // 2
+
+        new_image.paste(image, (paste_x, paste_y))
+
+        image.close()
+
         return new_image
 
     def _encode(self, inputs: dict) -> list[float]:
@@ -74,9 +60,6 @@ class Model:
         del features
         if self.device == "cuda":
             torch.cuda.empty_cache()
-
-        # ??????????
-        trim_memory()
 
         return result
 
