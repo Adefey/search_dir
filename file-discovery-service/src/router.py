@@ -52,6 +52,16 @@ def lpush_wrapper(file_path: str, action: int):
     logger.info(f"[PRODUCER] File {file_path} was added, action: {action}")
 
 
+def queue_deletion_wrapper(file_path: str):
+    """
+    Send delete task and reset mtime
+    """
+    logger.info(f"[PRODUCER] Deleting file {file_path}")
+    redis.hdel(METADATA_HASH_KEY, file_path)
+    redis.lpush(QUEUE_NAME, f"{file_path},{ACTION_DELETE_ID}")
+    logger.info(f"[PRODUCER] Delete task added {file_path}")
+
+
 class FileChangeHandler(FileSystemEventHandler):
     """
     Observer to check file updates in real time
@@ -70,7 +80,7 @@ class FileChangeHandler(FileSystemEventHandler):
     def on_deleted(self, event):
         if not event.is_directory:
             logger.info(f"[WATCHER] Found file deleted {event.src_path}")
-            lpush_wrapper(event.src_path, ACTION_DELETE_ID)
+            queue_deletion_wrapper(event.src_path)
 
 
 def producer():
@@ -89,7 +99,7 @@ def producer():
     observer.start()
     logger.info(f"[PRODUCER] Started watchdog")
     observer.join()
-    logger.info(f"[PRODUCER] Exited (Probably watchdog error)")
+    logger.info(f"[PRODUCER] Exited (Probably watchdog got error)")
 
 
 @asynccontextmanager
