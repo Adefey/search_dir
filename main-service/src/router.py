@@ -23,7 +23,6 @@ logging.basicConfig(
     ],
 )
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "30"))
-EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "")
 EMBEDDING_SIZE = int(os.environ.get("EMBEDDING_SIZE", "512"))
 QDRANT_COLLECTION_NAME = os.environ.get("QDRANT_COLLECTION_NAME", "files")
 
@@ -79,11 +78,13 @@ def post_search(
     try:
         result = search(qdrant, top_n, text_query, image_query)
     except ValueError as exc:
+        logger.error(f"Incorrect request, got exception: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Incorrect request, got exception: {str(exc)}",
         )
     except RuntimeError as exc:
+        logger.error(f"Error while processing request, got exception: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error while processing request, got exception: {str(exc)}",
@@ -114,6 +115,7 @@ def post_index(request: IndexRequestModel):
             logger.info(f"Indexing batch {i+1}")
             index_processor(batch, qdrant)
     except RuntimeError as exc:
+        logger.error(f"Error while processing request, got exception: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error while processing request, got exception: {str(exc)}",
@@ -132,6 +134,7 @@ def delete_index(request: FilePathModel):
     try:
         remove_file(filename, qdrant)
     except RuntimeError as exc:
+        logger.error(f"Error while removing file, got exception: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error while removing file, got exception: {str(exc)}",

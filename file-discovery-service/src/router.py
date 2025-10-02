@@ -21,8 +21,8 @@ logging.basicConfig(
 )
 
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "queue")
-METADATA_HASH_KEY = "file_metadata"
-MONITOR_PATH = "/data"
+METADATA_HASH_KEY = os.environ.get("METADATA_HASH_KEY", "file_metadata")
+MONITOR_PATH = os.environ.get("MONITOR_PATH", "/data")
 ACTION_CREATE_ID = int(os.environ.get("ACTION_CREATE_ID", "1"))
 ACTION_UPDATE_ID = int(os.environ.get("ACTION_UPDATE_ID", "2"))
 ACTION_DELETE_ID = int(os.environ.get("ACTION_DELETE_ID", "3"))
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 redis = Redis(host="redis", port=6379, decode_responses=True)
 
 
-def lpush_wrapper(file_path: str, action: int):
+def queue_add_wrapper(file_path: str, action: int):
     """
     Check file and add to queue
     """
@@ -70,12 +70,12 @@ class FileChangeHandler(FileSystemEventHandler):
     def on_created(self, event):
         if not event.is_directory:
             logger.info(f"[WATCHER] Found file {event.src_path}")
-            lpush_wrapper(event.src_path, ACTION_CREATE_ID)
+            queue_add_wrapper(event.src_path, ACTION_CREATE_ID)
 
     def on_modified(self, event):
         if not event.is_directory:
             logger.info(f"[WATCHER] Found file change {event.src_path}")
-            lpush_wrapper(event.src_path, ACTION_UPDATE_ID)
+            queue_add_wrapper(event.src_path, ACTION_UPDATE_ID)
 
     def on_deleted(self, event):
         if not event.is_directory:
@@ -92,7 +92,7 @@ def producer():
         for fname in fnames:
             full_filename = os.path.join(root, fname)
             logger.info(f"[PRODUCER] Found file {full_filename}")
-            lpush_wrapper(full_filename, ACTION_CREATE_ID)
+            queue_add_wrapper(full_filename, ACTION_CREATE_ID)
     logger.info(f"[PRODUCER] Starting watchdog")
     observer = Observer()
     observer.schedule(FileChangeHandler(), MONITOR_PATH, recursive=True)

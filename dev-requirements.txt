@@ -1,10 +1,12 @@
 autoflake==2.3.1
 black==25.9.0
+einops==0.8.1
 fastapi==0.117.1
 huggingface-hub==0.35.1
 isort==6.0.1
 numpy==2.3.3
 pillow==11.3.0
+protobuf==6.32.1
 pydantic==2.11.9
 python-multipart==0.0.20
 pyupgrade==3.20.0
@@ -12,11 +14,9 @@ qdrant-client==1.15.1
 redis==6.4.0
 requests==2.32.4
 sentencepiece==0.2.1
+timm==1.0.20
 torch==2.8.0
 torchvision==0.23.0
 transformers==4.56.2
 uvicorn==0.37.0
-einops==0.8.1
-timm==1.0.20
-protobuf==6.32.1
 watchdog==6.0.0

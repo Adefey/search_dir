@@ -11,11 +11,11 @@ from qdrant_client.models import PointIdsList, PointStruct
 from redis import Redis
 
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", 30))
-WAIT_TIME_SEC = 30
-CONNECTION_ERROR_WAIT_TIME_SEC = 5
+CONSUMER_EMPTY_RESCAN_DELAY = int(os.environ.get("CONSUMER_EMPTY_RESCAN_DELAY", 30))
+CONNECTION_ERROR_CONSUMER_RETRY_DELAY = int(os.environ.get("CONNECTION_ERROR_CONSUMER_RETRY_DELAY", 5))
 QUEUE_NAME = os.environ.get("QUEUE_NAME", "queue")
 QDRANT_COLLECTION_NAME = os.environ.get("QDRANT_COLLECTION_NAME", "files")
-EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "")
+EMBEDDING_SERVICE_URL = os.environ.get("EMBEDDING_SERVICE_ADDRESS", "EMBEDDING_SERVICE_ADDRESS")
 ACTION_CREATE_ID = int(os.environ.get("ACTION_CREATE_ID", "1"))
 ACTION_UPDATE_ID = int(os.environ.get("ACTION_UPDATE_ID", "2"))
 ACTION_DELETE_ID = int(os.environ.get("ACTION_DELETE_ID", "3"))
@@ -34,7 +34,7 @@ def consumer(redis: Redis, qdrant: QdrantClient):
         action = None
         filename = None
         if server_io_success:
-            queue_element = redis.brpop(QUEUE_NAME, timeout=WAIT_TIME_SEC)
+            queue_element = redis.brpop(QUEUE_NAME, timeout=CONSUMER_EMPTY_RESCAN_DELAY)
             if queue_element is not None:
                 _, queue_element = queue_element
                 queue_element = queue_element.split(",")
@@ -67,10 +67,11 @@ def consumer(redis: Redis, qdrant: QdrantClient):
                     server_io_success = True
                 except requests.exceptions.ConnectionError as exc:
                     logger.error(
-                        f"[CONSUMER] service call failed ({exc}), will retry in {CONNECTION_ERROR_WAIT_TIME_SEC} sec"
+                        f"[CONSUMER] service call failed ({exc}), will retry in"
+                        f" {CONNECTION_ERROR_CONSUMER_RETRY_DELAY} sec"
                     )
                     server_io_success = False
-                    sleep(CONNECTION_ERROR_WAIT_TIME_SEC)
+                    sleep(CONNECTION_ERROR_CONSUMER_RETRY_DELAY)
 
             if filename is None:
                 logger.info("[CONSUMER] No files were retrieved from queue")
@@ -90,6 +91,7 @@ def index_processor(file_paths: list[str], qdrant: QdrantClient):
     resp = requests.post(f"http://{EMBEDDING_SERVICE_URL}/api/v1/file_embeddings", files=files)
 
     if resp.status_code != 200:
+        logger.error(f"http://{EMBEDDING_SERVICE_URL}/api/v1/file_embeddings returned status {resp.status_code}")
         raise RuntimeError(f"http://{EMBEDDING_SERVICE_URL}/api/v1/file_embeddings returned status {resp.status_code}")
 
     json_resp = resp.json()
@@ -137,13 +139,15 @@ def search(
     Search files by text and/or image query
     """
     if text_query is None and image_query is None:
+        logger.error("Text Query and Image query cannot both be None")
         raise ValueError("Text Query and Image query cannot both be None")
 
-    logger.info(f"Got search request ")
+    logger.info(f"Got search request")
 
     if text_query:
         resp = requests.post(f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding", data={"text": text_query})
         if resp.status_code != status.HTTP_200_OK:
+            logger.error(f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status {resp.status_code}")
             raise RuntimeError(
                 f"http://{EMBEDDING_SERVICE_URL}/api/v1/text_embedding returned status {resp.status_code}",
             )
@@ -155,6 +159,7 @@ def search(
             files=[("image", image_query)],
         )
         if resp.status_code != status.HTTP_200_OK:
+            logger.error(f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding returned status {resp.status_code}")
             raise RuntimeError(
                 f"http://{EMBEDDING_SERVICE_URL}/api/v1/image_embedding returned status {resp.status_code}",
             )

@@ -1,5 +1,4 @@
-black . --unstable --line-length 120
-isort . --line-length 120
-find . -name '*.py' -print0 | xargs -0 pyupgrade
+pyupgrade --py313 $(find . -name "*.py" -type f)
 autoflake --in-place --recursive .
-
+isort . --line-length 120
+black . --unstable --line-length 120

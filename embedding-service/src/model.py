@@ -31,7 +31,7 @@ class Model:
             self.model_checkpoint,
             trust_remote_code=True,
             cache_dir="/model",
-            use_fast=False,
+            use_fast=True,
         )
         logger.info(f"Finished setting up model {self.model_checkpoint} on {self.device}")
 

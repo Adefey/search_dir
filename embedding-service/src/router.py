@@ -69,7 +69,7 @@ def post_text_embedding(text: str = Form(), _trim_task: None = Depends(manage_me
     try:
         embedding = model.encode_text(text)
     except Exception as exc:
-        logger.error("Error while getting embedding from text", exc_info=True)
+        logger.error(f"Processing failed with exception {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Processing failed with exception {str(exc)}",
@@ -93,7 +93,7 @@ def post_image_embedding(image: UploadFile, _trim_task: None = Depends(manage_me
     try:
         image = image.file.read()
     except Exception as exc:
-        logger.error("Error while preparing the image", exc_info=True)
+        logger.error(f"Cannot read image: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Cannot read image: {str(exc)}",
@@ -102,7 +102,7 @@ def post_image_embedding(image: UploadFile, _trim_task: None = Depends(manage_me
     try:
         embedding = model.encode_image(image)
     except Exception as exc:
-        logger.error("Error while getting embedding from image", exc_info=True)
+        logger.error(f"Processing failed with exception: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Processing failed with exception: {str(exc)}",
@@ -127,7 +127,7 @@ def post_file_embeddings(files: list[UploadFile], _trim_task: None = Depends(man
         filenames = [text_file.filename for text_file in files]
         contents = [text_file.file.read() for text_file in files]
     except Exception as exc:
-        logger.error("Error while preparing files", exc_info=True)
+        logger.error(f"Unprocessable files. Exception while reading data: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Unprocessable files. Exception while reading data: {str(exc)}",
@@ -160,11 +160,13 @@ def post_file_embeddings(files: list[UploadFile], _trim_task: None = Depends(man
             text_filename_embeddings = future_texts.result()
             image_filename_embeddings = future_images.result()
     except Exception as exc:
-        logger.error("Error while processing files", exc_info=True)
+        logger.error(f"Processing failed with exception: {str(exc)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Processing failed with exception: {str(exc)}",
         )
+
+    logger.info(f"Processed {len(text_filename_embeddings)} texts and {len(image_filename_embeddings)} images")
 
     response = ResponseFileEmbeddingsModel(
         file_records=[
