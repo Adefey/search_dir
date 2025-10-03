@@ -1,8 +1,8 @@
 from pydantic import BaseModel, FilePath
 
 
-class FilePathModel(BaseModel):
-    file: FilePath
+class FilePathsModel(BaseModel):
+    files: list[FilePath]
 
 
 class IndexRequestModel(BaseModel):

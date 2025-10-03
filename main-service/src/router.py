@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -6,12 +7,12 @@ from datetime import datetime
 from itertools import batched
 from threading import Thread
 
-from fastapi import FastAPI, File, Form, HTTPException, status
-from models import FilePathModel, IndexRequestModel, ResponsePathsModel, ScoredFileModel
-from qdrant_client import QdrantClient
+import gradio as gr
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
+from fastapi.staticfiles import StaticFiles
+from models import FilePathsModel, IndexRequestModel, ResponsePathsModel, ScoredFileModel
 from qdrant_client.models import Distance, VectorParams
-from redis import Redis
-from utils import consumer, index_processor, remove_file, search
+from utils import consumer, gradio_search_ui, index_processor, qdrant, redis, remove_file, search
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,8 +28,6 @@ EMBEDDING_SIZE = int(os.environ.get("EMBEDDING_SIZE", "512"))
 QDRANT_COLLECTION_NAME = os.environ.get("QDRANT_COLLECTION_NAME", "files")
 
 logger = logging.getLogger(__name__)
-qdrant = QdrantClient(host="qdrant", port=6333)
-redis = Redis(host="redis", port=6379, decode_responses=True)
 
 
 @asynccontextmanager
@@ -36,7 +35,7 @@ async def lifespan(app: FastAPI):
     """
     Run consumer in background
     """
-    Thread(target=consumer, args=(redis, qdrant), daemon=True).start()
+    Thread(target=consumer, daemon=True).start()
 
     yield
 
@@ -54,6 +53,24 @@ if not qdrant.collection_exists(QDRANT_COLLECTION_NAME):
         collection_name=QDRANT_COLLECTION_NAME,
         vectors_config=VectorParams(size=EMBEDDING_SIZE, distance=Distance.COSINE),
     )
+
+gradio_app = gr.Interface(
+    fn=gradio_search_ui,
+    inputs=[
+        gr.Textbox(label="Text query"),
+        gr.File(label="Image query", type="binary", file_types=["image"]),
+        gr.Slider(minimum=1, maximum=500, value=5, step=1, label="Result count"),
+    ],
+    outputs=[
+        gr.Gallery(label="Search result - image render", height="auto"),
+        gr.Files(label="Search result - files", type="filepath"),
+    ],
+    title="File search",
+    description="File search based on file content. Supports images and texts",
+)
+
+app = gr.mount_gradio_app(app, gradio_app, path="/ui")
+app.mount("/data", StaticFiles(directory="/data"), name="data")
 
 
 @app.post("/api/v1/search", response_model=ResponsePathsModel)
@@ -76,7 +93,7 @@ def post_search(
         image_query = None
 
     try:
-        result = search(qdrant, top_n, text_query, image_query)
+        result = search(text_query, image_query, top_n)
     except ValueError as exc:
         logger.error(f"Incorrect request, got exception: {str(exc)}")
         raise HTTPException(
@@ -113,7 +130,7 @@ def post_index(request: IndexRequestModel):
     try:
         for i, batch in enumerate(batches):
             logger.info(f"Indexing batch {i+1}")
-            index_processor(batch, qdrant)
+            index_processor(batch)
     except RuntimeError as exc:
         logger.error(f"Error while processing request, got exception: {str(exc)}")
         raise HTTPException(
@@ -125,14 +142,15 @@ def post_index(request: IndexRequestModel):
 
 
 @app.delete("/api/v1/index")
-def delete_index(request: FilePathModel):
+def delete_index(request: FilePathsModel):
     """
     Deletes file (by filename) from index
     """
     logger.info(f"Got delete /api/v1/index request")
-    filename = request.file
+    filenames = request.files
     try:
-        remove_file(filename, qdrant)
+        for filename in filenames:
+            remove_file(filename)
     except RuntimeError as exc:
         logger.error(f"Error while removing file, got exception: {str(exc)}")
         raise HTTPException(
@@ -141,3 +159,45 @@ def delete_index(request: FilePathModel):
         )
 
     logger.info(f"Finished delete /api/v1/index request")
+
+
+@app.post("/api/v1/files")
+def post_files(files: list[UploadFile]):
+    logger.info(f"Got post /api/v1/files request")
+
+    try:
+        filenames = [file.filename for file in files]
+        contents = [file.file.read() for file in files]
+    except Exception as exc:
+        logger.error(f"Unprocessable files. Exception while reading data: {str(exc)}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Unprocessable files. Exception while reading data: {str(exc)}",
+        )
+
+    for filename, content in zip(filenames, contents):
+
+        mime_type, _ = mimetypes.guess_file_type(filename)
+        open_file_mode = "wb"
+
+        if mime_type is None:
+            logger.warning(f"File {filename} misses MIME type suffix")
+
+        if "text" in mime_type:
+            logger.info(f"Received text: {filename}")
+            content = content.decode("utf-8", errors="ignore")
+            open_file_mode = "w"
+        elif "image" in mime_type:
+            logger.info(f"Received image: {filename}")
+        else:
+            logger.warning(f"File {filename} of type {mime_type} is not supported")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"File {filename} of type {mime_type} is not supported",
+            )
+
+        target_filename = os.path.join("/data", filename)
+        with open(target_filename, open_file_mode) as file:
+            file.write(content)
+
+    logger.info(f"Finished post /api/v1/files request")

@@ -124,8 +124,8 @@ def post_file_embeddings(files: list[UploadFile], _trim_task: None = Depends(man
     logger.info(f"Got /api/v1/file_embeddings request")
 
     try:
-        filenames = [text_file.filename for text_file in files]
-        contents = [text_file.file.read() for text_file in files]
+        filenames = [file.filename for file in files]
+        contents = [file.file.read() for file in files]
     except Exception as exc:
         logger.error(f"Unprocessable files. Exception while reading data: {str(exc)}")
         raise HTTPException(

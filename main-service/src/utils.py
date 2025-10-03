@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import os
 from hashlib import sha256
 from time import sleep
@@ -21,8 +22,11 @@ ACTION_UPDATE_ID = int(os.environ.get("ACTION_UPDATE_ID", "2"))
 ACTION_DELETE_ID = int(os.environ.get("ACTION_DELETE_ID", "3"))
 logger = logging.getLogger(__name__)
 
+redis = Redis(host="redis", port=6379, decode_responses=True)
+qdrant = QdrantClient(host="qdrant", port=6333)
 
-def consumer(redis: Redis, qdrant: QdrantClient):
+
+def consumer():
     """
     Endless function that runs in background to get jobs from queue
     """
@@ -47,7 +51,7 @@ def consumer(redis: Redis, qdrant: QdrantClient):
         elif action == ACTION_DELETE_ID:
             # Fast delete, no waiting
             logger.info(f"Removing file {filename} from index")
-            remove_file(filename, qdrant)
+            remove_file(filename)
 
         if len(index_files) >= BATCH_SIZE or filename is None:
             logger.info(f"[CONSUMER] Found {len(index_files)} files")
@@ -55,7 +59,7 @@ def consumer(redis: Redis, qdrant: QdrantClient):
                 logger.info(f"[CONSUMER] Sending to index")
 
                 try:
-                    index_processor(index_files, qdrant)
+                    index_processor(index_files)
                     logger.info("[CONSUMER] Index is processed")
                     index_files = []
                     logger.info("[CONSUMER] Buffer is cleared")
@@ -77,7 +81,7 @@ def consumer(redis: Redis, qdrant: QdrantClient):
                 logger.info("[CONSUMER] No files were retrieved from queue")
 
 
-def index_processor(file_paths: list[str], qdrant: QdrantClient):
+def index_processor(file_paths: list[str]):
     """
     Add files to index
     """
@@ -119,7 +123,7 @@ def index_processor(file_paths: list[str], qdrant: QdrantClient):
     logger.info(f"Finished index request")
 
 
-def remove_file(file_path: str, qdrant: QdrantClient):
+def remove_file(file_path: str):
     """
     Remove file from index
     """
@@ -130,10 +134,9 @@ def remove_file(file_path: str, qdrant: QdrantClient):
 
 
 def search(
-    qdrant: QdrantClient,
-    top_n: int = 5,
     text_query: str | None = None,
     image_query: bytes | None = None,
+    top_n: int = 5,
 ):
     """
     Search files by text and/or image query
@@ -184,3 +187,36 @@ def search(
 
     logger.info(f"Finished search")
     return files_and_scores
+
+
+def gradio_search_ui(text_query: str = None, image_query: bytes = None, top_n: int = 5):
+
+    # Protection against ''
+    if not text_query:
+        text_query = None
+
+    # Protection against b''
+    if not image_query:
+        image_query = None
+
+    result = []
+    try:
+        result = search(text_query, image_query, top_n)
+    except ValueError as exc:
+        logger.error(f"[UI] Incorrect request, got exception: {str(exc)}")
+    except RuntimeError as exc:
+        logger.error(f"[UI] Error while processing request, got exception: {str(exc)}")
+
+    result_paths_with_score = []
+    result_paths = []
+
+    for filename, score in result:
+        result_paths.append(filename)
+
+        mime_type, _ = mimetypes.guess_file_type(filename)
+        if "image" in mime_type:
+            result_paths_with_score.append((filename, f"Score: {score}"))
+        else:
+            logger.warning(f"File {filename} of type {mime_type} is not an image")
+
+    return result_paths_with_score, result_paths
