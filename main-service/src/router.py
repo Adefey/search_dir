@@ -70,8 +70,7 @@ gradio_app = gr.Interface(
     ],
     title="File search",
     description=(
-        "File search based on file content\nSupports images and texts.\nCurrently works only in English\nAdd new files"
-        " with POST https://search.adefe.xyz/api/v1/files\nFull API docs: https://search.adefe.xyz/docs\nSources:"
+        "File search based on file content. Supports images and texts. Currently works only in English.\n\nSource:"
         " https://github.com/Adefey/search_dir"
     ),
 )
@@ -81,7 +80,7 @@ app = gr.mount_gradio_app(
     gradio_app,
     path="/ui",
     pwa=True,
-    auth=(GRADIO_USER, GRADIO_PASSWORD) if GRADIO_USER is not None and GRADIO_PASSWORD is not None else None,
+    auth=[(GRADIO_USER, GRADIO_PASSWORD)] if GRADIO_USER is not None and GRADIO_PASSWORD is not None else None,
 )
 app.mount("/data", StaticFiles(directory="/data", follow_symlink=True), name="data")
 
