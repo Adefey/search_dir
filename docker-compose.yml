@@ -18,7 +18,9 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/data
-    env_file: "global_config.env"
+    env_file: 
+      - "global_config.env"
+      - "secret_config.env"
 
   file-discovery-service:
     build: ./file-discovery-service
@@ -31,7 +33,6 @@ services:
       - ./data:/data
     env_file:
       - global_config.env
-      - secret_config.env
 
   qdrant:
     image: qdrant/qdrant:latest
