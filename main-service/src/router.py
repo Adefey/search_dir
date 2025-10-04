@@ -12,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.staticfiles import StaticFiles
 from models import FilePathsModel, IndexRequestModel, ResponsePathsModel, ScoredFileModel
 from qdrant_client.models import Distance, VectorParams
-from utils import consumer, gradio_search_ui, index_processor, qdrant, redis, remove_file, search
+from utils import consumer, gradio_search_ui, index_processor, qdrant, remove_file, search
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,6 +26,9 @@ logging.basicConfig(
 BATCH_SIZE = int(os.environ.get("BATCH_SIZE", "30"))
 EMBEDDING_SIZE = int(os.environ.get("EMBEDDING_SIZE", "512"))
 QDRANT_COLLECTION_NAME = os.environ.get("QDRANT_COLLECTION_NAME", "files")
+GRADIO_USER = os.environ.get("GRADIO_USER", None)
+GRADIO_PASSWORD = os.environ.get("GRADIO_PASSWORD", None)
+
 
 logger = logging.getLogger(__name__)
 
@@ -66,11 +69,21 @@ gradio_app = gr.Interface(
         gr.Files(label="Search result - files", type="filepath"),
     ],
     title="File search",
-    description="File search based on file content. Supports images and texts",
+    description=(
+        "File search based on file content\nSupports images and texts.\nCurrently works only in English\nAdd new files"
+        " with POST https://search.adefe.xyz/api/v1/files\nFull API docs: https://search.adefe.xyz/docs\nSources:"
+        " https://github.com/Adefey/search_dir"
+    ),
 )
 
-app = gr.mount_gradio_app(app, gradio_app, path="/ui")
-app.mount("/data", StaticFiles(directory="/data"), name="data")
+app = gr.mount_gradio_app(
+    app,
+    gradio_app,
+    path="/ui",
+    pwa=True,
+    auth=(GRADIO_USER, GRADIO_PASSWORD) if GRADIO_USER is not None and GRADIO_PASSWORD is not None else None,
+)
+app.mount("/data", StaticFiles(directory="/data", follow_symlink=True), name="data")
 
 
 @app.post("/api/v1/search", response_model=ResponsePathsModel)
@@ -80,7 +93,7 @@ def post_search(
     top_n: int = 5,
 ):
     """
-    Search files on text or/and image query
+    Search files with text or/and image query
     """
     logger.info(f"Got /api/v1/search request")
 
@@ -115,7 +128,7 @@ def post_search(
 @app.post("/api/v1/index")
 def post_index(request: IndexRequestModel):
     """
-    Index text and image files
+    Index provided files (filenames). Supports JPG, PNG, TXT
     """
     logger.info(f"Got /api/v1/index request")
     file_paths = request.files
@@ -144,7 +157,7 @@ def post_index(request: IndexRequestModel):
 @app.delete("/api/v1/index")
 def delete_index(request: FilePathsModel):
     """
-    Deletes file (by filename) from index
+    Deletes file (by filename) from index and from storage. Actual file will not be deleter, it will be reindexed on app relaunch
     """
     logger.info(f"Got delete /api/v1/index request")
     filenames = request.files
@@ -163,6 +176,9 @@ def delete_index(request: FilePathsModel):
 
 @app.post("/api/v1/files")
 def post_files(files: list[UploadFile]):
+    """
+    Add new files that will be indexed up to 50 MB per one upload
+    """
     logger.info(f"Got post /api/v1/files request")
 
     try:
