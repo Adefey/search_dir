@@ -16,7 +16,10 @@ class Model:
         """
         Prepare the AutoModel and AutoProcessor
         """
-        self.model_checkpoint = os.environ.get("EMBEDDING_MODEL_CHECKPOINT", "openai/clip-vit-base-patch32")
+        self.model_checkpoint = os.environ.get(
+            "EMBEDDING_MODEL_CHECKPOINT",
+            "openai/clip-vit-base-patch32",
+        )
         self.image_resolution = os.environ.get("TARGET_IMAGE_SIZE", "224,224").split(",")
         self.image_resolution = (
             int(self.image_resolution[0]),
@@ -24,9 +27,11 @@ class Model:
         )
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Start setting up model {self.model_checkpoint} on {self.device}")
-        self.model = AutoModel.from_pretrained(self.model_checkpoint, trust_remote_code=True, cache_dir="/model").to(
-            self.device
-        )
+        self.model = AutoModel.from_pretrained(
+            self.model_checkpoint,
+            trust_remote_code=True,
+            cache_dir="/model",
+        ).to(self.device)
         self.processor = AutoProcessor.from_pretrained(
             self.model_checkpoint,
             trust_remote_code=True,
@@ -43,9 +48,16 @@ class Model:
         ImageOps.exif_transpose(image, in_place=True)
         image = image.convert("RGB")
 
-        new_image = Image.new("RGB", self.image_resolution, (0, 0, 0))
+        new_image = Image.new(
+            "RGB",
+            self.image_resolution,
+            (0, 0, 0),
+        )
 
-        image.thumbnail(self.image_resolution, Image.Resampling.LANCZOS)
+        image.thumbnail(
+            self.image_resolution,
+            Image.Resampling.LANCZOS,
+        )
         paste_x = (self.image_resolution[0] - image.width) // 2
         paste_y = (self.image_resolution[1] - image.height) // 2
 
@@ -99,7 +111,10 @@ class Model:
         logger.info(f"Start encoding image")
         image = self._preprocess_image(image)
         with torch.inference_mode():
-            inputs = self.processor(images=[image], return_tensors="pt")
+            inputs = self.processor(
+                images=[image],
+                return_tensors="pt",
+            )
             result = self._encode(inputs)[0]
         image.close()
         logger.info(f"Finished encoding image")

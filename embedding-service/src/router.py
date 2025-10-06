@@ -43,7 +43,9 @@ def trim_memory():
     logger.info("Memory trim finished.")
 
 
-def manage_memory_trim(background_tasks: BackgroundTasks):
+def manage_memory_trim(
+    background_tasks: BackgroundTasks,
+):
     """
     Background task that performs malloc_trim every TRIM_EVERY_N_MODEL_REQUESTS reuests
     """
@@ -60,7 +62,10 @@ def manage_memory_trim(background_tasks: BackgroundTasks):
     "/api/v1/text_embedding",
     response_model=ResponseEmbeddingOnlyModel,
 )
-def post_text_embedding(text: str = Form(), _trim_task: None = Depends(manage_memory_trim)):
+def post_text_embedding(
+    text: str = Form(),
+    _trim_task: None = Depends(manage_memory_trim),
+):
     """
     Get embedding from text
     """
@@ -84,7 +89,10 @@ def post_text_embedding(text: str = Form(), _trim_task: None = Depends(manage_me
     "/api/v1/image_embedding",
     response_model=ResponseEmbeddingOnlyModel,
 )
-def post_image_embedding(image: UploadFile, _trim_task: None = Depends(manage_memory_trim)):
+def post_image_embedding(
+    image: UploadFile,
+    _trim_task: None = Depends(manage_memory_trim),
+):
     """
     Get embedding from image
     """
@@ -117,7 +125,10 @@ def post_image_embedding(image: UploadFile, _trim_task: None = Depends(manage_me
     "/api/v1/file_embeddings",
     response_model=ResponseFileEmbeddingsModel,
 )
-def post_file_embeddings(files: list[UploadFile], _trim_task: None = Depends(manage_memory_trim)):
+def post_file_embeddings(
+    files: list[UploadFile],
+    _trim_task: None = Depends(manage_memory_trim),
+):
     """
     Get embeddings from files. Returns filenames with embeddings and unprocessed files
     """
@@ -145,7 +156,10 @@ def post_file_embeddings(files: list[UploadFile], _trim_task: None = Depends(man
             logger.warning(f"File {filename} misses MIME type suffix")
 
         if "text" in mime_type:
-            texts.append((filename, content.decode("utf-8", errors="ignore")))
+            texts.append((
+                filename,
+                content.decode("utf-8", errors="ignore"),
+            ))
         elif "image" in mime_type:
             images.append((filename, content))
         else:
@@ -170,7 +184,10 @@ def post_file_embeddings(files: list[UploadFile], _trim_task: None = Depends(man
 
     response = ResponseFileEmbeddingsModel(
         file_records=[
-            ResponseFileEmbeddingModel(file_path=filename, embedding=embedding)
+            ResponseFileEmbeddingModel(
+                file_path=filename,
+                embedding=embedding,
+            )
             for filename, embedding in text_filename_embeddings + image_filename_embeddings
         ],
         unprocessed_files=unprocessed,

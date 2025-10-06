@@ -18,7 +18,7 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/data
-    env_file: 
+    env_file:
       - "global_config.env"
       - "secret_config.env"
 
@@ -47,6 +47,5 @@ services:
     image: redis:8.2.1
     restart: always
     container_name: redis
-    volumes: 
+    volumes:
       - ./redis_cache:/data
-  

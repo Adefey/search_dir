@@ -58,7 +58,10 @@ def queue_deletion_wrapper(file_path: str):
     """
     logger.info(f"[PRODUCER] Deleting file {file_path}")
     redis.hdel(METADATA_HASH_KEY, file_path)
-    redis.lpush(QUEUE_NAME, f"{file_path},{ACTION_DELETE_ID}")
+    redis.lpush(
+        QUEUE_NAME,
+        f"{file_path},{ACTION_DELETE_ID}",
+    )
     logger.info(f"[PRODUCER] Delete task added {file_path}")
 
 
@@ -95,7 +98,11 @@ def producer():
             queue_add_wrapper(full_filename, ACTION_CREATE_ID)
     logger.info(f"[PRODUCER] Starting watchdog")
     observer = Observer()
-    observer.schedule(FileChangeHandler(), MONITOR_PATH, recursive=True)
+    observer.schedule(
+        FileChangeHandler(),
+        MONITOR_PATH,
+        recursive=True,
+    )
     observer.start()
     logger.info(f"[PRODUCER] Started watchdog")
     observer.join()

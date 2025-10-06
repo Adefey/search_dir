@@ -1,5 +1,4 @@
 import logging
-import mimetypes
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -12,7 +11,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.staticfiles import StaticFiles
 from models import FilePathsModel, IndexRequestModel, ResponsePathsModel, ScoredFileModel
 from qdrant_client.models import Distance, VectorParams
-from utils import consumer, gradio_search_ui, index_processor, qdrant, remove_file, search
+from utils import consumer, index_processor, qdrant, remove_file, search, search_ui, upload_files, upload_files_ui
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,38 +53,86 @@ if not qdrant.collection_exists(QDRANT_COLLECTION_NAME):
     logger.info(f"Creating db 'files' with embedding size {EMBEDDING_SIZE}")
     qdrant.create_collection(
         collection_name=QDRANT_COLLECTION_NAME,
-        vectors_config=VectorParams(size=EMBEDDING_SIZE, distance=Distance.COSINE),
+        vectors_config=VectorParams(
+            size=EMBEDDING_SIZE,
+            distance=Distance.COSINE,
+        ),
     )
 
-gradio_app = gr.Interface(
-    fn=gradio_search_ui,
-    inputs=[
-        gr.Textbox(label="Text query"),
-        gr.File(label="Image query", type="binary", file_types=["image"]),
-        gr.Slider(minimum=1, maximum=500, value=5, step=1, label="Result count"),
-    ],
-    outputs=[
-        gr.Gallery(label="Search result - image render", height="auto"),
-        gr.Files(label="Search result - files", type="filepath"),
-    ],
-    title="File search",
-    description=(
-        "File search based on file content. Supports images and texts. Currently works only in English.\n\nSource:"
-        " https://github.com/Adefey/search_dir"
-    ),
+with gr.Blocks(title="Search") as gradio_app:
+    with gr.Tab("Search"):
+        gr.Interface(
+            fn=search_ui,
+            inputs=[
+                gr.Textbox(label="Text query"),
+                gr.File(
+                    label="Image query",
+                    type="binary",
+                    file_types=["image"],
+                ),
+                gr.Slider(
+                    minimum=1,
+                    maximum=500,
+                    value=5,
+                    step=1,
+                    label="Result count",
+                ),
+            ],
+            outputs=[
+                gr.Gallery(
+                    label="Search result - image render",
+                    height="auto",
+                ),
+                gr.Files(
+                    label="Search result - files",
+                    type="filepath",
+                ),
+            ],
+            title="File search",
+            description="File search based on file content. Supports images and texts. Currently works only in English",
+        )
+    with gr.Tab("Upload"):
+        gr.Interface(
+            fn=upload_files_ui,
+            inputs=[
+                gr.File(
+                    file_count="multiple",
+                    label="Load new files to be indexed",
+                    file_types=["image", "text"],
+                )
+            ],
+            outputs=[gr.Label(label="Upload status")],
+            title="File upload",
+            description="Upload file that will be indexed and available for search",
+            submit_btn="Upload",
+        )
+
+    gr.Markdown("""
+    ---
+    <p align="center">
+        Source code: <a href="https://github.com/Adefey/search_dir" target="_blank">Adefey/search_dir on GitHub</a>
+    </p>
+    """)
+
+    app = gr.mount_gradio_app(
+        app,
+        gradio_app,
+        path="/ui",
+        pwa=True,
+        auth=([(GRADIO_USER, GRADIO_PASSWORD)] if GRADIO_USER is not None and GRADIO_PASSWORD is not None else None),
+    )
+
+app.mount(
+    "/data",
+    StaticFiles(directory="/data", follow_symlink=True),
+    name="data",
 )
 
-app = gr.mount_gradio_app(
-    app,
-    gradio_app,
-    path="/ui",
-    pwa=True,
-    auth=[(GRADIO_USER, GRADIO_PASSWORD)] if GRADIO_USER is not None and GRADIO_PASSWORD is not None else None,
+
+@app.post(
+    "/api/v1/search",
+    response_model=ResponsePathsModel,
 )
-app.mount("/data", StaticFiles(directory="/data", follow_symlink=True), name="data")
-
-
-@app.post("/api/v1/search", response_model=ResponsePathsModel)
 def post_search(
     text_query: str | None = Form(default=None),
     image_query: bytes | None = File(default=None),
@@ -190,29 +237,12 @@ def post_files(files: list[UploadFile]):
             detail=f"Unprocessable files. Exception while reading data: {str(exc)}",
         )
 
-    for filename, content in zip(filenames, contents):
-
-        mime_type, _ = mimetypes.guess_file_type(filename)
-        open_file_mode = "wb"
-
-        if mime_type is None:
-            logger.warning(f"File {filename} misses MIME type suffix")
-
-        if "text" in mime_type:
-            logger.info(f"Received text: {filename}")
-            content = content.decode("utf-8", errors="ignore")
-            open_file_mode = "w"
-        elif "image" in mime_type:
-            logger.info(f"Received image: {filename}")
-        else:
-            logger.warning(f"File {filename} of type {mime_type} is not supported")
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"File {filename} of type {mime_type} is not supported",
-            )
-
-        target_filename = os.path.join("/data", filename)
-        with open(target_filename, open_file_mode) as file:
-            file.write(content)
+    try:
+        upload_files(filenames, contents)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Error happened while processing uploaded files: {str(exc)}",
+        )
 
     logger.info(f"Finished post /api/v1/files request")
