@@ -256,7 +256,7 @@ def search_ui(
         if mime_type is None:
             logger.warning(f"File {filename} misses MIME type suffix")
             continue
-        
+
         if "image" in mime_type:
             image_paths_with_score.append((filename, f"Score: {score}"))
 
