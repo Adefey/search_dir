@@ -110,7 +110,7 @@ with gr.Blocks(title="Search") as gradio_app:
     gr.Markdown("""
     ---
     <p align="center">
-        Source code: <a href="https://github.com/Adefey/search_dir" target="_blank">Adefey/search_dir on GitHub</a>
+        Source code: <a href="https://github.com/Adefey/search_dir" target="_blank">Adefey/search_dir</a> on GitHub
     </p>
     """)
 

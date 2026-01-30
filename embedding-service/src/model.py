@@ -3,7 +3,6 @@ import logging
 import os
 
 import torch
-import torch.nn.functional as F
 from PIL import Image, ImageOps
 from transformers import AutoModel, AutoProcessor
 
@@ -31,7 +30,8 @@ class Model:
             self.model_checkpoint,
             trust_remote_code=True,
             cache_dir="/model",
-        ).to(self.device)
+            device_map={"": self.device},
+        )
         self.processor = AutoProcessor.from_pretrained(
             self.model_checkpoint,
             trust_remote_code=True,
@@ -77,9 +77,6 @@ class Model:
             features = self.model.get_image_features(**inputs)
         else:
             features = self.model.get_text_features(**inputs)
-
-        # Normalization
-        features = F.normalize(features, p=2, dim=1)
 
         result = features.cpu().detach().numpy().tolist()
 
