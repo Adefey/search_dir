@@ -252,6 +252,11 @@ def search_ui(
         result_paths.append(filename)
 
         mime_type, _ = mimetypes.guess_file_type(filename)
+
+        if mime_type is None:
+            logger.warning(f"File {filename} misses MIME type suffix")
+            continue
+
         if "image" in mime_type:
             result_paths_with_score.append((filename, f"Score: {score}"))
         else:
@@ -272,6 +277,11 @@ def upload_files(
 
     for filename, content in zip(filenames, file_contents):
         mime_type, _ = mimetypes.guess_file_type(filename)
+
+        if mime_type is None:
+            logger.warning(f"File {filename} misses MIME type suffix")
+            continue
+
         open_file_mode = "wb"
 
         if mime_type is None:

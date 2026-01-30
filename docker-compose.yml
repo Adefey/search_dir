@@ -33,7 +33,8 @@ services:
       - 8000
     volumes:
       - ./logs:/app/logs
-      - ./data:/data:ro
+      - ./data_persistent:/data/persistent:ro
+      - ./data_upload:/data/upload:ro
     env_file:
       - global_config.env
 

@@ -152,8 +152,10 @@ def post_file_embeddings(
 
     for filename, content in zip(filenames, contents):
         mime_type, _ = mimetypes.guess_file_type(filename)
+
         if mime_type is None:
             logger.warning(f"File {filename} misses MIME type suffix")
+            continue
 
         if "text" in mime_type:
             texts.append((
