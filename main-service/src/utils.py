@@ -289,7 +289,7 @@ def upload_files(
                 f"File {filename} of type {mime_type} is not supported",
             )
 
-        target_filename = os.path.join("/data", filename)
+        target_filename = os.path.join("/data/upload", filename)
         with open(target_filename, open_file_mode) as file:
             logger.info(f"Writing to new file {target_filename}")
             file.write(content)

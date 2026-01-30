@@ -1,7 +1,8 @@
 qdrant_data
 redis_cache
 logs/*
-data*
-!data/examples/*
+
+!data_persistent/examples/*
+!data_upload/.gitempty
 secret_config.env
 .vscode

@@ -26,9 +26,10 @@ MONITOR_PATH = os.environ.get("MONITOR_PATH", "/data")
 ACTION_CREATE_ID = int(os.environ.get("ACTION_CREATE_ID", "1"))
 ACTION_UPDATE_ID = int(os.environ.get("ACTION_UPDATE_ID", "2"))
 ACTION_DELETE_ID = int(os.environ.get("ACTION_DELETE_ID", "3"))
+REDIS_HOST_NAME = os.environ.get("REDIS_HOST_NAME", "redis")
 
 logger = logging.getLogger(__name__)
-redis = Redis(host="redis", port=6379, decode_responses=True)
+redis = Redis(host=REDIS_HOST_NAME, port=6379, decode_responses=True)
 
 
 def queue_add_wrapper(file_path: str, action: int):

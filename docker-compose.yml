@@ -3,8 +3,8 @@ services:
     build: ./embedding-service
     restart: always
     container_name: embedding-service
-    ports:
-      - 8001:8000
+    expose:
+      - 8000
     volumes:
       - ./logs:/app/logs
     env_file:
@@ -19,7 +19,8 @@ services:
       - 8002:8000
     volumes:
       - ./logs:/app/logs
-      - ./data:/data:ro
+      - ./data_persistent:/data/persistent:ro
+      - ./data_upload:/data/upload:rw
     env_file:
       - "global_config.env"
       - "secret_config.env"
@@ -28,8 +29,8 @@ services:
     build: ./file-discovery-service
     restart: always
     container_name: file-discovery-service
-    ports:
-      - 8003:8000
+    expose:
+      - 8000
     volumes:
       - ./logs:/app/logs
       - ./data:/data:ro
@@ -42,8 +43,8 @@ services:
     container_name: qdrant
     volumes:
       - ./qdrant_data:/qdrant/storage
-    ports:
-      - 6333:6333
+    expose:
+      - 6333
 
   redis:
     image: redis:8.4.0
@@ -51,3 +52,5 @@ services:
     container_name: redis
     volumes:
       - ./redis_cache:/data
+    expose:
+      - 6379
