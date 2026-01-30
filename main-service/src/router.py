@@ -74,7 +74,7 @@ with gr.Blocks(title="Search") as gradio_app:
                 gr.Slider(
                     minimum=1,
                     maximum=500,
-                    value=5,
+                    value=6,
                     step=1,
                     label="Result count",
                 ),
@@ -85,7 +85,7 @@ with gr.Blocks(title="Search") as gradio_app:
                     height="auto",
                 ),
                 gr.Files(
-                    label="Search result - files",
+                    label="Search result - all found files",
                     type="filepath",
                 ),
             ],

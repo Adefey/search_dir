@@ -245,7 +245,7 @@ def search_ui(
     except RuntimeError as exc:
         logger.error(f"[UI] Error while processing request, got exception: {str(exc)}")
 
-    result_paths_with_score = []
+    image_paths_with_score = []
     result_paths = []
 
     for filename, score in result:
@@ -256,13 +256,11 @@ def search_ui(
         if mime_type is None:
             logger.warning(f"File {filename} misses MIME type suffix")
             continue
-
+        
         if "image" in mime_type:
-            result_paths_with_score.append((filename, f"Score: {score}"))
-        else:
-            logger.warning(f"File {filename} of type {mime_type} is not an image")
+            image_paths_with_score.append((filename, f"Score: {score}"))
 
-    return result_paths_with_score, result_paths
+    return image_paths_with_score, result_paths
 
 
 def upload_files(
