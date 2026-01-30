@@ -1,11 +1,5 @@
 qdrant_data
 redis_cache
 logs/*
-data*
-!data/applejack.png
-!data/fluttershy.jpg
-!data/pinkie_pie.jpg 
-!data/rainbow_dash.png
-!data/rarity.jpg
-!data/twilight_sparkle.png
+
 secret_config.env
