@@ -1,5 +1,7 @@
 qdrant_data
 redis_cache
 logs/*
-
+data*
+!data/examples/*
 secret_config.env
+.vscode

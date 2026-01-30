@@ -7,8 +7,10 @@ services:
       - 8001:8000
     volumes:
       - ./logs:/app/logs
-    env_file: "global_config.env"
-
+    env_file:
+      - "global_config.env"
+      - "secret_config.env"
+  
   main-service:
     build: ./main-service
     restart: always
@@ -17,7 +19,7 @@ services:
       - 8002:8000
     volumes:
       - ./logs:/app/logs
-      - ./data:/data
+      - ./data:/data:ro
     env_file:
       - "global_config.env"
       - "secret_config.env"
@@ -30,7 +32,7 @@ services:
       - 8003:8000
     volumes:
       - ./logs:/app/logs
-      - ./data:/data
+      - ./data:/data:ro
     env_file:
       - global_config.env
 
