@@ -27,6 +27,7 @@ EMBEDDING_SIZE = int(os.environ.get("EMBEDDING_SIZE", "512"))
 QDRANT_COLLECTION_NAME = os.environ.get("QDRANT_COLLECTION_NAME", "files")
 GRADIO_USER = os.environ.get("GRADIO_USER", None)
 GRADIO_PASSWORD = os.environ.get("GRADIO_PASSWORD", None)
+APP_VERSION = os.environ.get("APP_VERSION", "0.1")
 
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Main Microservise",
     description="Microservice used to manage search and indexation, stores indexed giles in vector DB",
-    version=os.environ.get("APP_VERSION", "0.1"),
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -107,11 +108,10 @@ with gr.Blocks(title="Search") as gradio_app:
             submit_btn="Upload",
         )
 
-    gr.Markdown("""
+    gr.Markdown(f"""
     ---
-    <p align="center">
-        Source code: <a href="https://github.com/Adefey/search_dir" target="_blank">Adefey/search_dir</a> on GitHub
-    </p>
+    <p align="center">Source code: <a href="https://github.com/Adefey/search_dir" target="_blank">Adefey/search_dir</a> on GitHub</p>
+    <p align="center">App version: {APP_VERSION}</p>
     """)
 
     app = gr.mount_gradio_app(
